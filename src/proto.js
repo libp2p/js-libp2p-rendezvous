@@ -3,7 +3,6 @@
 const protons = require('protons')
 
 module.exports = protons(`
-message Message {
   enum MessageType {
     REGISTER = 0;
     REGISTER_RESPONSE = 1;
@@ -30,7 +29,7 @@ message Message {
     E_NOT_AUTHORIZED    = 200;
   }
 
-  message RegisterReponse {
+  message RegisterResponse {
     optional RegisterStatus code = 1;
   }
 
@@ -50,6 +49,7 @@ message Message {
     optional int64 timestamp = 2;
   }
 
+message Message {
   optional MessageType type = 1;
   optional Register register = 2;
   optional RegisterResponse registerResponse = 3;

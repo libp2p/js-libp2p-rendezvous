@@ -4,7 +4,7 @@
   "description": "A javascript implementation of the rendezvous protocol for libp2p",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "aegir test"
   },
   "keywords": [
     "libp2p",
@@ -15,12 +15,17 @@
   "author": "Maciej Krüger <mkg20001@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "chai": "^4.1.2",
+    "dirty-chai": "^2.0.1",
     "protons": "^1.0.1",
     "pull-protocol-buffers": "^0.1.2"
   },
   "devDependencies": {
     "aegir": "^13.0.6",
     "libp2p": "^0.20.2",
+    "libp2p-mplex": "^0.7.0",
+    "libp2p-secio": "^0.10.0",
+    "libp2p-spdy": "^0.12.1",
     "libp2p-tcp": "^0.12.0"
   },
   "repository": {

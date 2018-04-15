@@ -4,25 +4,8 @@
 const RPC = require('./rpc')
 const debug = require('debug')
 const log = debug('libp2p:rendezvous:server')
-
-class AsyncQueue {
-  constructor () {
-    this.tasks = []
-    this.taskIds = {}
-    this.triggered = false
-  }
-  add (name, fnc) {
-    if (this.taskIds[name]) return
-    this.taskIds[name] = true
-    this.tasks.push(fnc)
-    this.trigger()
-  }
-  trigger () {
-    if (this.triggered) return
-    this.triggered = true
-    setTimeout(() => { this.tasks.forEach(f => f()); this.tasks = []; this.taskIds = {}; this.triggered = false }, 100)
-  }
-}
+const AsyncQueue = require('./queue')
+const MAX_LIMIT = 200 // TODO: spec this
 
 class NS {
   constructor (name, que) { // name is a utf8 string
@@ -47,6 +30,7 @@ class NS {
     })
   }
   getPeers (since, limit, ownId) {
+    if (limit <= 0 || limit > MAX_LIMIT) limit = MAX_LIMIT
     return this.sorted.filter(p => p.ts >= since && p.id !== ownId).slice(0, limit).map(p => this.id[p.id])
   }
 }

@@ -2,7 +2,7 @@
 
 const pull = require('pull-stream')
 const ppb = require('pull-protocol-buffers')
-const {Message, MessageType} = require('../proto')
+const {Message, MessageType} = require('./proto')
 const Pushable = require('pull-pushable')
 const debug = require('debug')
 const log = debug('libp2p-rendezvous:rpc')
@@ -37,18 +37,21 @@ class RPC {
     }
   }
   sink (read) {
-    const next = (end, msg) => {
+    const next = (end, msg, doend) => {
+      if (doend) {
+        return read(doend, next)
+      }
       if (end) {
-        log('end: %s %s', this.id, end)
+        log('end@%s: %s', this.id, end)
         this.source.end()
-        return read(true, next)
+        return
       }
       let f
       switch (msg.type) {
         case MessageType.REGISTER_RESPONSE:
           f = this.cbs.register.shift()
           if (typeof f !== 'function') {
-            log('register response ignored, no cb found!')
+            log('register@%s: response ignored, no cb found!', this.id)
             return read(null, next)
           } else {
             let e
@@ -63,24 +66,24 @@ class RPC {
           try {
             f = this.cbs.discover.shift()
             if (typeof f !== 'function') {
-              log('discover response ignored, no cb found!')
+              log('discover@%s: response ignored, no cb found!', this.id)
               return read(null, next)
             } else {
               pi = msg.discoverResponse.registrations.map(p => {
                 try {
                   // TODO: use other values like ttl/ns in peer-info?
                   const pi = new Peer(new Id(p.peer.id))
-                  p.peer.addrs.forEach(a => pi.multiaddr.add(a))
+                  p.peer.addrs.forEach(a => pi.multiaddrs.add(a))
                   return pi
                 } catch (e) {
-                  log('invalid pi returned: %s', e)
+                  log('discover@%s: invalid pi returned: %s', this.id, e)
                   return
                 }
               }).filter(Boolean)
             }
           } catch (e) {
             f(e)
-            return next(e)
+            return next(null, null, e)
           }
           f(null, {
             timestamp: msg.discoverResponse.timestamp,
@@ -88,8 +91,8 @@ class RPC {
           })
           break
         default: // should that disconnect or just get ignored?
-          log('peer %s sent wrong msg type %s', this.id, msg.type)
-          return next(true)
+          log('error@%s: sent wrong msg type %s', this.id, msg.type)
+          return next(null, null, true)
       }
       read(null, next)
     }
@@ -107,6 +110,8 @@ class RPC {
         ppb.encode(Message),
         conn
       )
+
+      cb()
     })
   }
 

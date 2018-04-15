@@ -16,12 +16,13 @@ class RendezvousDiscovery {
       rpc.setup(conn, err => {
         if (err) return cb(err)
         this.peers.push(rpc)
+        cb()
       })
     })
   }
 
   _rpc (cmd, ...a) { // TODO: add. round-robin / multicast / anycast?
-
+    this.peers[0][cmd](...a)
   }
 
   register (ns, peer, cb) {
