@@ -55,8 +55,15 @@ class RPC {
                 code: RegisterStatus.OK
               }
             })
-          } catch (e) { // TODO: Add E_INVALID_PEER_INFO
-            return next(e)
+          } catch (e) { // TODO: this might also throw on non-peer-info errors
+            log(e) // let's debug the above statement
+            this.source.push({
+              type: MessageType.REGISTER_RESPONSE,
+              registerResponse: {
+                code: RegisterStatus.E_INVALID_PEER_INFO
+              }
+            })
+            return read(null, next)
           }
           break
         case MessageType.UNREGISTER:
