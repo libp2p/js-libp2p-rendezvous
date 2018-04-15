@@ -140,6 +140,16 @@ class RPC {
     })
     this.cbs.discover.push(wrap(cb, TIMEOUT))
   }
+
+  unregister (ns, id) {
+    this.source.push({
+      type: MessageType.UNREGISTER,
+      unregister: {
+        ns,
+        id
+      }
+    })
+  }
 }
 
 module.exports = RPC

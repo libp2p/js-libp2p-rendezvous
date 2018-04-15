@@ -41,4 +41,18 @@ describe('discovery', () => {
       done()
     })
   })
+
+  it('unregister', done => {
+    client2.unregister('hello')
+    setTimeout(() => done(), 100) // Queue is being processed every 100ms
+  })
+
+  it('discover (after unregister)', done => {
+    client.discover('hello', (err, res) => {
+      if (err) return done(err)
+      expect(err).to.not.exist()
+      expect(res.peers).to.have.lengthOf(0)
+      done()
+    })
+  })
 })

@@ -50,6 +50,18 @@ class RendezvousDiscovery {
     this._rpc('discover', ns, limit, since, cb)
   }
 
+  unregister (ns, id) {
+    if (!ns) {
+      id = this.swarm.peerInfo.id.toBytes()
+      ns = null
+    }
+    if (!id) {
+      id = this.swarm.peerInfo.id.toBytes()
+    }
+
+    this._rpc('unregister', ns, id)
+  }
+
   start (cb) {
     this.swarm.on('peer:connect', peer => {
       this._dial(peer)
