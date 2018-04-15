@@ -61,6 +61,7 @@ class Server {
       NS: {},
       RPC: {}
     }
+    this._stubNS = new NS('', this.que)
   }
 
   start () {
@@ -84,8 +85,14 @@ class Server {
     // TODO: remove on disconnect
   }
 
-  getNS (name, create) { // TODO: avoid creating empty NSs for discovery and remove NSs that get empty
-    if (!this.table.NS[name]) return (this.table.NS[name] = new NS(name, this.que))
+  getNS (name, create) { // TODO: remove NSs that get empty
+    if (!this.table.NS[name]) {
+      if (create) {
+        return (this.table.NS[name] = new NS(name, this.que))
+      } else {
+        return this._stubNS
+      }
+    }
     return this.table.NS[name]
   }
 }

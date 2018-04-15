@@ -48,7 +48,7 @@ class RPC {
             }
             const pi = new Peer(new Id(msg.register.peer.id))
             msg.register.peer.addrs.forEach(a => pi.multiaddr.add(a))
-            this.main.getNS(msg.register.ns).addPeer(pi, Date.now(), msg.register.ttl)
+            this.main.getNS(msg.register.ns, true).addPeer(pi, Date.now(), msg.register.ttl)
             this.source.push({
               type: MessageType.REGISTER_RESPONSE,
               registerResponse: {
@@ -69,7 +69,7 @@ class RPC {
           break
         case MessageType.DISCOVER:
           try {
-            const peers = this.main.getNS(msg.discover.ns, false).getPeers(msg.discover.since || 0, msg.discover.limit, this.id) // TODO: add a max-limit to avoid dos?
+            const peers = this.main.getNS(msg.discover.ns).getPeers(msg.discover.since || 0, msg.discover.limit, this.id) // TODO: add a max-limit to avoid dos?
             this.source.push({
               type: MessageType.DISCOVER_RESPONSE,
               discoverResponse: {
