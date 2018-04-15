@@ -1,0 +1,26 @@
+{
+  "name": "libp2p-rendezvous-protocol",
+  "version": "0.0.0",
+  "description": "A javascript implementation of the rendezvous protocol for libp2p",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "libp2p",
+    "rendezvous",
+    "protocol",
+    "discovery"
+  ],
+  "author": "Maciej Krüger <mkg20001@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "protons": "^1.0.1",
+    "pull-protocol-buffers": "^0.1.2"
+  },
+  "devDependencies": {
+    "aegir": "^13.0.6",
+    "libp2p": "^0.20.2",
+    "libp2p-tcp": "^0.12.0"
+  }
+}
