@@ -1,4 +1,4 @@
-# libp2p-rendezvous-protocol
+# libp2p-rendezvous
 
 A javascript implementation of the rendezvous protocol for libp2p
 
