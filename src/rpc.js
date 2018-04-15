@@ -9,11 +9,18 @@ const log = debug('libp2p-rendezvous:rpc')
 const Peer = require('peer-info')
 const Id = require('peer-id')
 
+const registerErrors = {
+  100: 'Invalid namespace provided',
+  101: 'Invalid peer-info provided',
+  200: 'Not authorized'
+}
+
 class RPC {
   constructor () {
     this.source = Pushable()
     this.cbs = {
-      discover: []
+      discover: [],
+      register: []
     }
   }
   sink (read) {
@@ -23,11 +30,22 @@ class RPC {
         this.source.end()
         return read(true, next)
       }
+      let f
       switch (msg.type) {
-        case MessageType.REGISTER_RESPONSE: // TODO: spec in progress
+        case MessageType.REGISTER_RESPONSE:
+          f = this.cbs.register.shift()
+          if (typeof f !== 'function') {
+            log('register response ignored, no cb found!')
+            return read(null, next)
+          } else {
+            let e
+            if (msg.registerResponse.code) {
+              e = new Error('Server returned error: ' + (registerErrors[msg.registerResponse.code] || '(unknown code)'))
+            }
+            f(e)
+          }
           break
         case MessageType.DISCOVER_RESPONSE:
-          let f
           let pi
           try {
             f = this.cbs.discover.shift()
