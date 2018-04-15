@@ -6,9 +6,10 @@ module.exports = protons(`
 message Message {
   enum MessageType {
     REGISTER = 0;
-    UNREGISTER = 1;
-    DISCOVER = 2;
-    DISCOVER_RESPONSE = 3;
+    REGISTER_RESPONSE = 1;
+    UNREGISTER = 2;
+    DISCOVER = 3;
+    DISCOVER_RESPONSE = 4;
   }
 
   message PeerInfo {
@@ -19,7 +20,18 @@ message Message {
   message Register {
     optional string ns = 1;
     optional PeerInfo peer = 2;
-    optional int64 ttl = 3;
+    optional int64 ttl = 3; // in seconds
+  }
+
+  enum RegisterStatus {
+    OK = 0;
+    E_INVALID_NAMESPACE = 100;
+    E_INVALID_PEER_INFO = 101;
+    E_NOT_AUTHORIZED    = 200;
+  }
+
+  message RegisterReponse {
+    optional RegisterStatus code = 1;
   }
 
   message Unregister {
@@ -40,7 +52,8 @@ message Message {
 
   optional MessageType type = 1;
   optional Register register = 2;
-  optional Unregister unregister = 3;
-  optional Discover discover = 4;
-  optional DiscoverResponse discoverResponse = 5;
+  optional RegisterResponse registerResponse = 3;
+  optional Unregister unregister = 4;
+  optional Discover discover = 5;
+  optional DiscoverResponse discoverResponse = 6;
 }`)
