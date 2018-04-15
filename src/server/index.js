@@ -46,7 +46,7 @@ class NS {
       this.sorted = Object.keys(this.id).map(id => { return {id, ts: this.id[id].ts} }).sort((a, b) => a.ts - b.ts)
     })
   }
-  getPeers (since, limit, ownId) { // TODO: shouldn't it return a random slice of the result array instead of the N first peers after "since"?
+  getPeers (since, limit, ownId) {
     return this.sorted.filter(p => p.ts >= since && p.id !== ownId).slice(0, limit).map(p => this.id[p.id])
   }
 }

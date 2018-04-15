@@ -2,7 +2,7 @@
 
 const pull = require('pull-stream')
 const ppb = require('pull-protocol-buffers')
-const {Message, MessageType} = require('../proto')
+const {Message, MessageType, RegisterStatus} = require('../proto')
 const Pushable = require('pull-pushable')
 const debug = require('debug')
 const log = debug('libp2p-rendezvous:server:rpc')
@@ -27,19 +27,35 @@ class RPC {
         case MessageType.REGISTER:
           try {
             if (msg.register.peer.id && new Id(msg.register.peer.id).toB58String() !== this.id) {
-              // TODO: Add E_NOT_AUTHORIZED
-              return next(true)
+              this.source.push({
+                type: MessageType.REGISTER_RESPONSE,
+                registerResponse: {
+                  code: RegisterStatus.E_NOT_AUTHORIZED
+                }
+              })
+              return read(null, next)
             } else if (!msg.register.peer.id) {
               msg.register.peer.id = this.pi.id.toBytes()
             }
             if (msg.register.ns > MAX_NS_LENGTH) {
-              // TODO: Add E_NAMESPACE_TOO_LONG
-              return next(true)
+              this.source.push({
+                type: MessageType.REGISTER_RESPONSE,
+                registerResponse: {
+                  code: RegisterStatus.E_INVALID_NAMESPACE
+                }
+              })
+              return read(null, next)
             }
             const pi = new Peer(new Id(msg.register.peer.id))
             msg.register.peer.addrs.forEach(a => pi.multiaddr.add(a))
             this.main.getNS(msg.register.ns).addPeer(pi, Date.now(), msg.register.ttl)
-          } catch (e) {
+            this.source.push({
+              type: MessageType.REGISTER_RESPONSE,
+              registerResponse: {
+                code: RegisterStatus.OK
+              }
+            })
+          } catch (e) { // TODO: Add E_INVALID_PEER_INFO
             return next(e)
           }
           break
@@ -80,6 +96,7 @@ class RPC {
           log('peer %s sent wrong msg type %s', this.id, msg.type)
           return next(true)
       }
+      read(null, next)
     }
     read(null, next)
   }
