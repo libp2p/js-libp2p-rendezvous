@@ -8,11 +8,24 @@ const debug = require('debug')
 const log = debug('libp2p-rendezvous:rpc')
 const Peer = require('peer-info')
 const Id = require('peer-id')
+const once = require('once')
+
+const TIMEOUT = 1000 * 10 // TODO: spec this
 
 const registerErrors = {
   100: 'Invalid namespace provided',
   101: 'Invalid peer-info provided',
   200: 'Not authorized'
+}
+
+function wrap (f, t) {
+  let cb = once((...a) => {
+    clearTimeout(timeout)
+    f(...a)
+  })
+  let timeout
+  timeout = setTimeout(() => cb(new Error('Timeout!')), t)
+  return cb
 }
 
 class RPC {
@@ -95,6 +108,33 @@ class RPC {
         conn
       )
     })
+  }
+
+  register (ns, peer, ttl, cb) {
+    this.source.push({
+      type: MessageType.REGISTER,
+      register: {
+        ns,
+        peer: {
+          id: peer.id.toBytes(),
+          addrs: peer.multiaddrs.toArray().map(a => a.buffer)
+        },
+        ttl
+      }
+    })
+    this.cbs.register.push(wrap(cb, TIMEOUT))
+  }
+
+  discover (ns, limit, since, cb) {
+    this.source.push({
+      type: MessageType.DISCOVER,
+      discover: {
+        ns,
+        limit,
+        since
+      }
+    })
+    this.cbs.discover.push(wrap(cb, TIMEOUT))
   }
 }
 

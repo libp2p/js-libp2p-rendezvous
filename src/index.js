@@ -20,12 +20,12 @@ class RendezvousDiscovery {
     })
   }
 
-  _rpc (cmd, ...a) { // TODO: add. round-robin v multicast v anycast?
+  _rpc (cmd, ...a) { // TODO: add. round-robin / multicast / anycast?
 
   }
 
   register (ns, peer, cb) {
-    this._rpc('register', ns, peer, cb)
+    this._rpc('register', ns, peer, 0, cb) // TODO: interface does not expose ttl option?!
   }
 
   discover (ns, limit, since, cb) {
