@@ -30,24 +30,24 @@ class RendezvousDiscovery {
     this._rpc('register', ns, peer, 0, cb) // TODO: interface does not expose ttl option?!
   }
 
-  discover (ns, limit, since, cb) {
-    if (typeof since === 'function') {
-      cb = since
-      since = 0
+  discover (ns, limit, cookie, cb) {
+    if (typeof cookie === 'function') {
+      cb = cookie
+      cookie = Buffer.from('')
     }
     if (typeof limit === 'function') {
-      since = 0
+      cookie = Buffer.from('')
       cb = limit
       limit = 0
     }
     if (typeof ns === 'function') {
-      since = 0
+      cookie = Buffer.from('')
       limit = 0
       cb = ns
       ns = null
     }
 
-    this._rpc('discover', ns, limit, since, cb)
+    this._rpc('discover', ns, limit, cookie, cb)
   }
 
   unregister (ns, id) {

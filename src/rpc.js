@@ -39,6 +39,7 @@ class RPC {
   sink (read) {
     const next = (end, msg, doend) => {
       if (doend) {
+        log('crash@%s: %s', this.id, doend)
         return read(doend, next)
       }
       if (end) {
@@ -131,13 +132,13 @@ class RPC {
     this.cbs.register.push(wrap(cb, TIMEOUT))
   }
 
-  discover (ns, limit, since, cb) {
+  discover (ns, limit, cookie, cb) {
     this.source.push({
       type: MessageType.DISCOVER,
       discover: {
         ns,
         limit,
-        since
+        cookie
       }
     })
     this.cbs.discover.push(wrap(cb, TIMEOUT))

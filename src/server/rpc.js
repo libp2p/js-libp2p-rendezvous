@@ -10,6 +10,7 @@ const Peer = require('peer-info')
 const Id = require('peer-id')
 
 const MAX_NS_LENGTH = 255 // TODO: spec this
+const MAX_LIMIT = 1000 // TODO: spec this
 
 class RPC {
   constructor (main) {
@@ -19,6 +20,7 @@ class RPC {
   sink (read) {
     const next = (end, msg, doend) => {
       if (doend) {
+        log('crash@%s: %s', this.id, doend)
         return read(doend, next)
       }
       if (end) {
@@ -87,7 +89,8 @@ class RPC {
         case MessageType.DISCOVER:
           try {
             log('discover@%s: discover on %s', this.id, msg.discover.ns)
-            const peers = this.main.getNS(msg.discover.ns).getPeers(msg.discover.since || 0, msg.discover.limit, this.id) // TODO: add a max-limit to avoid dos?
+            if (msg.discover.limit <= 0 || msg.discover.limit > MAX_LIMIT) msg.discover.limit = MAX_LIMIT
+            const {peers, cookie} = this.main.getNS(msg.discover.ns).getPeers(msg.discover.cookie || Buffer.from(''), msg.discover.limit, this.id)
             log('discover@%s: got %s peers', this.id, peers.length)
             this.source.push({
               type: MessageType.DISCOVER_RESPONSE,
@@ -102,7 +105,7 @@ class RPC {
                     ttl: p.ttl
                   }
                 }),
-                timestamp: peers.length ? peers.pop().ts : null
+                cookie
               }
             })
           } catch (e) {

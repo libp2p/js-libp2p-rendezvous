@@ -41,12 +41,12 @@ module.exports = protons(`
   message Discover {
     optional string ns = 1;
     optional int64 limit = 2;
-    optional int64 since = 3;
+    optional bytes cookie = 3;
   }
 
   message DiscoverResponse {
     repeated Register registrations = 1;
-    optional int64 timestamp = 2;
+    optional bytes cookie = 2;
   }
 
 message Message {

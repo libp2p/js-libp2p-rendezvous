@@ -5,47 +5,7 @@ const RPC = require('./rpc')
 const debug = require('debug')
 const log = debug('libp2p:rendezvous:server')
 const AsyncQueue = require('./queue')
-const MAX_LIMIT = 1000 // TODO: spec this
-
-class NS {
-  constructor (name, que) { // name is a utf8 string
-    this.name = name
-    this.hexName = Buffer.from(name).toString('hex') // needed to prevent queue-dos attacks
-    this.que = que
-    this.id = {}
-    this.sorted = []
-  }
-  addPeer (pi, ts, ttl, isOnline) { // isOnline returns a bool if the rpc connection still exists
-    const id = pi.id.toB58String()
-    this.id[id] = {pi, ts, ttl}
-    if (ttl) {
-      let expireAt = ts + ttl * 1000
-      this.id[id].online = () => Date.now() >= expireAt
-    } else {
-      this.id[id].online = isOnline
-    }
-    this.update()
-  }
-  removePeer (pid) {
-    delete this.id[pid]
-    this.update()
-  }
-  update () {
-    this.que.add('sort@' + this.hexName, () => {
-      this.sorted = Object.keys(this.id).map(id => { return {id, ts: this.id[id].ts} }).sort((a, b) => a.ts - b.ts)
-    })
-  }
-  getPeers (since, limit, ownId) {
-    if (limit <= 0 || limit > MAX_LIMIT) limit = MAX_LIMIT
-    return this.sorted.filter(p => p.ts > since && p.id !== ownId).slice(0, limit).map(p => this.id[p.id])
-  }
-  gc () {
-    return Object.keys(this.id).filter(k => !this.id[k].online()).map(k => delete this.id[k]).length
-  }
-  get useless () {
-    return !Object.keys(this.id).length
-  }
-}
+const BasicStore = require('./store/basic')
 
 class Server {
   constructor (opt) {
@@ -57,7 +17,9 @@ class Server {
       NS: {},
       RPC: {}
     }
-    this._stubNS = new NS('', this.que)
+    const Store = opt.store || BasicStore
+    this.store = new Store(this)
+    this._stubNS = this.store.create(Buffer.alloc(256, '0').toString())
   }
 
   start () {
@@ -83,10 +45,10 @@ class Server {
     // TODO: remove on disconnect
   }
 
-  getNS (name, create) { // TODO: remove NSs that get empty
+  getNS (name, create) {
     if (!this.table.NS[name]) {
       if (create) {
-        return (this.table.NS[name] = new NS(name, this.que))
+        return (this.table.NS[name] = this.store.create(name))
       } else {
         return this._stubNS
       }
