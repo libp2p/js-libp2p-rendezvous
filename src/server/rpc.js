@@ -108,8 +108,8 @@ class RPC {
             return next(null, null, e)
           }
           break
-//      case MessageType.REGISTER_RESPONSE:
-//      case MessageType.DISCOVER_RESPONSE:
+        // case MessageType.REGISTER_RESPONSE:
+        // case MessageType.DISCOVER_RESPONSE:
         default: // should that disconnect or just get ignored?
           log('error@%s: sent wrong msg type %s', this.id, msg.type)
           return next(null, null, true)

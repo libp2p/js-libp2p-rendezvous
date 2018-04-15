@@ -1,5 +1,7 @@
 'use strict'
 
+/* eslint-env mocha */
+
 const {parallel} = require('async')
 const Utils = require('./utils')
 

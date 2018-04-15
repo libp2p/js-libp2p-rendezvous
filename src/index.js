@@ -12,6 +12,7 @@ class RendezvousDiscovery {
   _dial (pi, cb) {
     if (!cb) cb = noop
     this.swarm.dialProtocol(pi, '/rendezvous/1.0.0', (err, conn) => {
+      if (err) return cb(err)
       const rpc = new RPC()
       rpc.setup(conn, err => {
         if (err) return cb(err)

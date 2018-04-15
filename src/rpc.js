@@ -47,6 +47,7 @@ class RPC {
         return
       }
       let f
+      let pi
       switch (msg.type) {
         case MessageType.REGISTER_RESPONSE:
           f = this.cbs.register.shift()
@@ -62,7 +63,6 @@ class RPC {
           }
           break
         case MessageType.DISCOVER_RESPONSE:
-          let pi
           try {
             f = this.cbs.discover.shift()
             if (typeof f !== 'function') {
@@ -77,7 +77,6 @@ class RPC {
                   return pi
                 } catch (e) {
                   log('discover@%s: invalid pi returned: %s', this.id, e)
-                  return
                 }
               }).filter(Boolean)
             }
