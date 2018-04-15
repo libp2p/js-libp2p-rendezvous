@@ -31,7 +31,7 @@ class NS {
   }
   getPeers (since, limit, ownId) {
     if (limit <= 0 || limit > MAX_LIMIT) limit = MAX_LIMIT
-    return this.sorted.filter(p => p.ts >= since && p.id !== ownId).slice(0, limit).map(p => this.id[p.id])
+    return this.sorted.filter(p => p.ts > since && p.id !== ownId).slice(0, limit).map(p => this.id[p.id])
   }
 }
 
