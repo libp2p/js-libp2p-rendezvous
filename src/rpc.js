@@ -42,6 +42,7 @@ class RPC {
         return read(doend, next)
       }
       if (end) {
+        this.online = false
         log('end@%s: %s', this.id, end)
         this.source.end()
         return
@@ -110,6 +111,7 @@ class RPC {
         conn
       )
 
+      this.online = true
       cb()
     })
   }

@@ -55,4 +55,14 @@ describe('discovery', () => {
       done()
     })
   })
+
+  it('unregister other client', done => {
+    client.unregister('hello')
+    setTimeout(() => done(), 100) // Queue is being processed every 100ms
+  })
+
+  it('gc', () => {
+    server.gc()
+    expect(Object.keys(server.table.NS)).to.have.lengthOf(0)
+  })
 })

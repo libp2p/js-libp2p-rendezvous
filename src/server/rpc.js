@@ -22,6 +22,7 @@ class RPC {
         return read(doend, next)
       }
       if (end) {
+        this.online = false
         log('end@%s: %s', this.id, end)
         this.source.end()
         return
@@ -54,7 +55,7 @@ class RPC {
             }
             const pi = new Peer(new Id(msg.register.peer.id))
             msg.register.peer.addrs.forEach(a => pi.multiaddrs.add(a))
-            this.main.getNS(msg.register.ns, true).addPeer(pi, Date.now(), msg.register.ttl)
+            this.main.getNS(msg.register.ns, true).addPeer(pi, Date.now(), msg.register.ttl, () => this.online)
             log('register@%s: ok', this.id)
             this.source.push({
               type: MessageType.REGISTER_RESPONSE,
@@ -131,6 +132,7 @@ class RPC {
         conn
       )
 
+      this.online = true
       cb()
     })
   }

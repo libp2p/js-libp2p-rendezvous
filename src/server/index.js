@@ -5,7 +5,7 @@ const RPC = require('./rpc')
 const debug = require('debug')
 const log = debug('libp2p:rendezvous:server')
 const AsyncQueue = require('./queue')
-const MAX_LIMIT = 200 // TODO: spec this
+const MAX_LIMIT = 1000 // TODO: spec this
 
 class NS {
   constructor (name, que) { // name is a utf8 string
@@ -15,9 +15,15 @@ class NS {
     this.id = {}
     this.sorted = []
   }
-  addPeer (pi, ts, ttl) {
+  addPeer (pi, ts, ttl, isOnline) { // isOnline returns a bool if the rpc connection still exists
     const id = pi.id.toB58String()
-    this.id[id] = {pi, ts, ttl} // TODO: add TTL support
+    this.id[id] = {pi, ts, ttl}
+    if (ttl) {
+      let expireAt = ts + ttl * 1000
+      this.id[id].online = () => Date.now() >= expireAt
+    } else {
+      this.id[id].online = isOnline
+    }
     this.update()
   }
   removePeer (pid) {
@@ -25,13 +31,19 @@ class NS {
     this.update()
   }
   update () {
-    this.que.add(this.hexName + '/sort', () => {
+    this.que.add('sort@' + this.hexName, () => {
       this.sorted = Object.keys(this.id).map(id => { return {id, ts: this.id[id].ts} }).sort((a, b) => a.ts - b.ts)
     })
   }
   getPeers (since, limit, ownId) {
     if (limit <= 0 || limit > MAX_LIMIT) limit = MAX_LIMIT
     return this.sorted.filter(p => p.ts > since && p.id !== ownId).slice(0, limit).map(p => this.id[p.id])
+  }
+  gc () {
+    return Object.keys(this.id).filter(k => !this.id[k].online()).map(k => delete this.id[k]).length
+  }
+  get useless () {
+    return !Object.keys(this.id).length
   }
 }
 
@@ -49,6 +61,7 @@ class Server {
   }
 
   start () {
+    this.gcIntv = setInterval(this.gc.bind(this), 60 * 1000)
     this.node.handle('/rendezvous/1.0.0', (proto, conn) => {
       const rpc = new RPC(this)
       rpc.setup(conn, err => {
@@ -59,6 +72,7 @@ class Server {
   }
 
   stop () {
+    clearInterval(this.gcIntv)
     // TODO: clear vars, shutdown conns, etc.
     this.node.unhandle('/rendezvous/1.0.0')
   }
@@ -78,6 +92,19 @@ class Server {
       }
     }
     return this.table.NS[name]
+  }
+
+  gc () {
+    Object.keys(this.table.NS).forEach(ns => {
+      const n = this.table.NS[ns]
+      const removed = n.gc()
+      if (n.useless) {
+        log('drop NS %s because it is empty', n.name)
+        delete this.table.NS[ns]
+      } else {
+        if (removed) n.update()
+      }
+    })
   }
 }
 
