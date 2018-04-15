@@ -1,5 +1,5 @@
 {
-  "name": "libp2p-rendezvous-protocol",
+  "name": "libp2p-rendezvous",
   "version": "0.0.0",
   "description": "A javascript implementation of the rendezvous protocol for libp2p",
   "main": "index.js",
@@ -25,10 +25,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mkg20001/libp2p-rendezvous-protocol.git"
+    "url": "git+https://github.com/mkg20001/libp2p-rendezvous.git"
   },
   "bugs": {
-    "url": "https://github.com/mkg20001/libp2p-rendezvous-protocol/issues"
+    "url": "https://github.com/mkg20001/libp2p-rendezvous/issues"
   },
-  "homepage": "https://github.com/mkg20001/libp2p-rendezvous-protocol#readme"
+  "homepage": "https://github.com/mkg20001/libp2p-rendezvous#readme"
 }
