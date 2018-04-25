@@ -2,7 +2,7 @@
 
 const pull = require('pull-stream')
 const ppb = require('pull-protocol-buffers')
-const {Message, MessageType, RegisterStatus} = require('../proto')
+const {Message, MessageType, ResponseStatus} = require('../proto')
 const Pushable = require('pull-pushable')
 const debug = require('debug')
 const log = debug('libp2p-rendezvous:server:rpc')
@@ -11,6 +11,22 @@ const Id = require('peer-id')
 
 const MAX_NS_LENGTH = 255 // TODO: spec this
 const MAX_LIMIT = 1000 // TODO: spec this
+
+const registerErrors = {
+  100: 'Invalid namespace provided',
+  101: 'Invalid peer-info provided',
+  102: 'Invalid TTL provided',
+  103: 'Invalid cookie provided',
+  200: 'Not authorized',
+  300: 'Internal Server Error'
+}
+
+const craftStatus = (status) => {
+  return {
+    status,
+    statusText: registerErrors[status]
+  }
+}
 
 class RPC {
   constructor (main) {
@@ -37,9 +53,7 @@ class RPC {
               log('register@%s: auth err (want %s)', this.id, new Id(msg.register.peer.id).toB58String())
               this.source.push({
                 type: MessageType.REGISTER_RESPONSE,
-                registerResponse: {
-                  code: RegisterStatus.E_NOT_AUTHORIZED
-                }
+                registerResponse: craftStatus(ResponseStatus.E_NOT_AUTHORIZED)
               })
               return read(null, next)
             } else if (!msg.register.peer.id) {
@@ -49,9 +63,7 @@ class RPC {
               log('register@%s: ns err', this.id)
               this.source.push({
                 type: MessageType.REGISTER_RESPONSE,
-                registerResponse: {
-                  code: RegisterStatus.E_INVALID_NAMESPACE
-                }
+                registerResponse: craftStatus(ResponseStatus.E_INVALID_NAMESPACE)
               })
               return read(null, next)
             }
@@ -61,18 +73,14 @@ class RPC {
             log('register@%s: ok', this.id)
             this.source.push({
               type: MessageType.REGISTER_RESPONSE,
-              registerResponse: {
-                code: RegisterStatus.OK
-              }
+              registerResponse: craftStatus(ResponseStatus.OK)
             })
-          } catch (e) { // TODO: this might also throw on non-peer-info errors
-            log('register@%s: other (possibly peer-info related) error', this.id)
-            log(e) // let's debug the above statement
+          } catch (e) {
+            log('register@%s: internal error', this.id)
+            log(e)
             this.source.push({
               type: MessageType.REGISTER_RESPONSE,
-              registerResponse: {
-                code: RegisterStatus.E_INVALID_PEER_INFO
-              }
+              registerResponse: craftStatus(ResponseStatus.E_INTERNAL_ERROR)
             })
             return read(null, next)
           }
@@ -88,6 +96,7 @@ class RPC {
           break
         case MessageType.DISCOVER:
           try {
+            // TODO: add more errors
             log('discover@%s: discover on %s', this.id, msg.discover.ns)
             if (msg.discover.limit <= 0 || msg.discover.limit > MAX_LIMIT) msg.discover.limit = MAX_LIMIT
             const {peers, cookie} = this.main.getNS(msg.discover.ns).getPeers(msg.discover.cookie || Buffer.from(''), msg.discover.limit, this.id)
@@ -109,7 +118,13 @@ class RPC {
               }
             })
           } catch (e) {
-            return next(null, null, e)
+            log('discover@%s: internal error', this.id)
+            log(e)
+            this.source.push({
+              type: MessageType.DISCOVER_RESPONSE,
+              registerResponse: craftStatus(ResponseStatus.E_INTERNAL_ERROR)
+            })
+            return read(null, next)
           }
           break
         // case MessageType.REGISTER_RESPONSE:

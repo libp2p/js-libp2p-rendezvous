@@ -12,12 +12,6 @@ const once = require('once')
 
 const TIMEOUT = 1000 * 10 // TODO: spec this
 
-const registerErrors = {
-  100: 'Invalid namespace provided',
-  101: 'Invalid peer-info provided',
-  200: 'Not authorized'
-}
-
 function wrap (f, t) {
   let cb = once((...a) => {
     clearTimeout(timeout)
@@ -58,8 +52,8 @@ class RPC {
             return read(null, next)
           } else {
             let e
-            if (msg.registerResponse.code) {
-              e = new Error('Server returned error: ' + (registerErrors[msg.registerResponse.code] || '(unknown code)'))
+            if (msg.registerResponse.status) {
+              e = new Error('Server returned error: ' + (msg.registerResponse.statusText || '(unknown code)'))
             }
             f(e)
           }
@@ -71,6 +65,9 @@ class RPC {
               log('discover@%s: response ignored, no cb found!', this.id)
               return read(null, next)
             } else {
+              if (msg.discoverResponse.status) {
+                return setImmediate(() => f(new Error('Server returned error: ' + (msg.discoverResponse.statusText || '(unknown code)'))))
+              }
               pi = msg.discoverResponse.registrations.map(p => {
                 try {
                   // TODO: use other values like ttl/ns in peer-info?
@@ -81,15 +78,15 @@ class RPC {
                   log('discover@%s: invalid pi returned: %s', this.id, e)
                 }
               }).filter(Boolean)
+              setImmediate(() => f(null, {
+                cookie: msg.discoverResponse.cookie,
+                peers: pi
+              }))
             }
           } catch (e) {
             f(e)
             return next(null, null, e)
           }
-          f(null, {
-            timestamp: msg.discoverResponse.timestamp,
-            peers: pi
-          })
           break
         default: // should that disconnect or just get ignored?
           log('error@%s: sent wrong msg type %s', this.id, msg.type)
