@@ -18,7 +18,11 @@ const validatePeer = (peer) => {
 
 // Creates the default revision store
 const createRevisionStore = () => {
-  return Map({_rev: 0, namespaces: Map()})
+  return Map({
+    _rev: 0,
+    global_namespace: Map(),
+    namespaces: Map()
+  })
 }
 
 // Helper for incrementing the revision in a store
@@ -37,7 +41,7 @@ const setNamespaces = (store, value) => {
 }
 
 // Creates a peer table within a store
-const createPeerTable = (store, name) => {
+const createNamespace = (store, name) => {
   // Check if namespace already exists
   if (getNamespaces(store).get(name)) {
     return store
@@ -48,7 +52,7 @@ const createPeerTable = (store, name) => {
 }
 
 // Adds a peer to a peer table within a namespace
-const addToPeerTable = (store, peerTableName, peerInfo) => {
+const addPeerToNamespace = (store, peerTableName, peerInfo) => {
   const peerErr = validatePeer(peerInfo)
   if (peerErr) {
     throw new Error('Peer was not valid for adding to rendezvous namespace. ' + peerErr)
@@ -63,8 +67,20 @@ const addToPeerTable = (store, peerTableName, peerInfo) => {
   return setNamespaces(store, getNamespaces(store).set(peerTableName, newPeerTable))
 }
 
+// Add a peer to the global namespace
+const addPeer = (store, peerInfo) => {
+  const peerErr = validatePeer(peerInfo)
+  if (peerErr) {
+    throw new Error('Peer was not valid for adding to rendezvous namespace. ' + peerErr)
+  }
+  // We made a modification, lets increment the revision
+  store = incrementRevision(store)
+  // Return the new store with the new values
+  return store.set('global_namespace', store.get('global_namespace').set(peerInfo.id, Map(peerInfo)))
+}
+
 // Removes a peer from a peer table within a namespace
-const removeFromPeerTable = (store, peerTableName, peerID) => {
+const removePeerFromNamespace = (store, peerTableName, peerID) => {
   // Get a version of the peer table we can modify
   let newPeerTable = getNamespaces(store).get(peerTableName)
   // remove the Peer from it
@@ -75,13 +91,20 @@ const removeFromPeerTable = (store, peerTableName, peerID) => {
   return setNamespaces(store, getNamespaces(store).set(peerTableName, newPeerTable))
 }
 
+// Removes a peer from the global namespace
+const removePeer = (store, peerID) => {
+  // We made a modification, lets increment the revision
+  store = incrementRevision(store)
+  // Return the new store with new values
+  return store.set('global_namespace', store.get('global_namespace').delete(peerID))
+}
+
 // Checks all the ttls and removes peers that are expired
 const clearExpired = (store, peerTableName, currentTime) => {
   // Get the peer table
   const peerTable = getNamespaces(store).get(peerTableName)
   // Go through all peers
   const newStore = peerTable.reduce((accStore, v) => {
-    const receivedAt = new Date(v.get('received_at'))
     const expiresAt = new Date(v.get('received_at'))
 
     // Add TTL seconds to date to get when it should expire
@@ -92,7 +115,7 @@ const clearExpired = (store, peerTableName, currentTime) => {
 
     // If it's less than zero, peer has expired and we should remove it
     if (diffInSeconds < 0) {
-      return removeFromPeerTable(accStore, peerTableName, v.get('id'))
+      return removePeerFromNamespace(accStore, peerTableName, v.get('id'))
     }
     return accStore
   }, store)
@@ -102,9 +125,11 @@ const clearExpired = (store, peerTableName, currentTime) => {
 
 module.exports = {
   createStore: createRevisionStore,
-  createNamespace: createPeerTable,
-  addPeer: addToPeerTable,
-  removePeer: removeFromPeerTable,
+  createNamespace: createNamespace,
+  addPeer: addPeer,
+  addPeerToNamespace: addPeerToNamespace,
+  removePeer: removePeer,
+  removePeerFromNamespace: removePeerFromNamespace,
   clearExpired: clearExpired,
   utils: {
     getNamespaces,
