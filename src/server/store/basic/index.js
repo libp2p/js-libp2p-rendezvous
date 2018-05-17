@@ -1,5 +1,7 @@
 'use strict'
 
+// WARNING: Deprecated, please use `store/immutable` instead
+
 class NS {
   constructor (name, que) { // name is a utf8 string
     this.name = name

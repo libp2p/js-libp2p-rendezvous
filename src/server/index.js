@@ -34,9 +34,11 @@ class Server {
   }
 
   stop () {
-    clearInterval(this.gcIntv)
-    // TODO: clear vars, shutdown conns, etc.
-    this.node.unhandle('/rendezvous/1.0.0')
+    if (this && this.gcIntv) {
+      clearInterval(this.gcIntv)
+      // TODO: clear vars, shutdown conns, etc.
+      this.node.unhandle('/rendezvous/1.0.0')
+    }
   }
 
   storeRPC (rpc) {

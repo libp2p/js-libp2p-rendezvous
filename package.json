@@ -4,7 +4,10 @@
   "description": "A javascript implementation of the rendezvous protocol for libp2p",
   "main": "index.js",
   "scripts": {
-    "test": "aegir test"
+    "test": "aegir test",
+    "test:node": "aegir test -t node",
+    "test:browser": "aegir test -t browser",
+    "test:webworker": "aegir test -t webworker"
   },
   "keywords": [
     "libp2p",
@@ -17,6 +20,7 @@
   "dependencies": {
     "chai": "^4.1.2",
     "dirty-chai": "^2.0.1",
+    "immutable": "4.0.0-rc.9",
     "protons": "^1.0.1",
     "pull-protocol-buffers": "^0.1.2"
   },

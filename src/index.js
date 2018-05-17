@@ -3,6 +3,12 @@
 const RPC = require('./rpc')
 const noop = () => {}
 
+
+// One interface that:
+//
+// RenderzvousClient
+// RenderzvousPoint
+
 class RendezvousDiscovery {
   constructor (swarm) {
     this.swarm = swarm
