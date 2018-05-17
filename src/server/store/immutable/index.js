@@ -38,7 +38,13 @@ const setNamespaces = (store, value) => {
 
 // Creates a peer table within a store
 const createPeerTable = (store, name) => {
-  return setNamespaces(store, getNamespaces(store).set(name, Map({})))
+  // Check if namespace already exists
+  if (getNamespaces(store).get(name)) {
+    return store
+  } else {
+    // Didn't exists, let's create it with a empty Map
+    return setNamespaces(store, getNamespaces(store).set(name, Map({})))
+  }
 }
 
 // Adds a peer to a peer table within a namespace
@@ -82,7 +88,7 @@ const clearExpired = (store, peerTableName, currentTime) => {
     expiresAt.setSeconds(expiresAt.getSeconds() + v.get('ttl'))
 
     // Get amount of seconds diff with current time
-    const diffInSeconds = (receivedAt - expiresAt) / 1000
+    const diffInSeconds = (expiresAt - currentTime) / 1000
 
     // If it's less than zero, peer has expired and we should remove it
     if (diffInSeconds < 0) {

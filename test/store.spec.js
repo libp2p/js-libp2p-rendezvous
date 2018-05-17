@@ -71,7 +71,16 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeers(store, 'my-app', 0)
   })
-  xit('add duplicate namespace wont clear existing peers')
+  it('add duplicate namespace wont clear existing peers', () => {
+    const peer = createPeer()
+    let store = createNamespace(createStore(), 'my-app')
+    store = addPeer(store, 'my-app', peer)
+    store = createNamespace(store, 'my-app')
+
+    assertRevisionNumber(store, 1)
+    assertNumberOfNamespaces(store, 1)
+    assertNumberOfPeers(store, 'my-app', 1)
+  })
   it('can add peer', () => {
     const peer = createPeer()
     let store = createNamespace(createStore(), 'my-app')
@@ -106,8 +115,8 @@ describe('immutable store', () => {
     const peer = createPeer()
     let store = createNamespace(createStore(), 'my-app')
     store = addPeer(store, 'my-app', peer)
-    const dateAfterExpired = new Date('2018-05-17T13:00:15.000Z')
-    store = clearExpired(store, 'my-app', dateAfterExpired)
+    const dateBeforeExpired = new Date('2018-05-17T13:00:00.000Z')
+    store = clearExpired(store, 'my-app', dateBeforeExpired)
 
     assertRevisionNumber(store, 1)
     assertNumberOfNamespaces(store, 1)
