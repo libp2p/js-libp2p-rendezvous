@@ -61,6 +61,10 @@ describe('discovery', () => {
     setTimeout(() => done(), 100) // Queue is being processed every 100ms
   })
 
+  it('stop clients', done => {
+    parallel([client, client2].map(c => cb => c.stop(cb)), done)
+  })
+
   it('gc', () => {
     server.gc()
     expect(Object.keys(server.table.NS)).to.have.lengthOf(0)

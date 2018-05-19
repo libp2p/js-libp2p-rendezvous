@@ -2,31 +2,66 @@
 
 const RPC = require('./rpc')
 const noop = () => {}
+const once = require('once')
+const debug = require('debug')
+const log = debug('libp2p:rendezvous')
 const State = require('./state')
+const {each, map} = require('async')
 
 class RendezvousDiscovery {
   constructor (swarm) {
     this.swarm = swarm
     this.rpc = []
     this.rpcById = {}
-    this.state = new State(this)
     this.swarm.on('peer:connect', peer => {
       this._dial(peer)
     })
   }
 
+  _getState (id) {
+    id = id.toString('hex')
+    if (!this.state[id]) return (this.state[id] = new State(this, id))
+    return this.state[id]
+  }
+
   _dial (pi, cb) {
     if (!cb) cb = noop
+    cb = once(cb)
     if (!this.state) return cb()
+    this._cleanPeers()
+    if (this.rpcById[pi.id.toB58String()]) {
+      log('skip reconnecting %s', pi.id.toB58String())
+      return cb()
+    }
     this.swarm.dialProtocol(pi, '/rendezvous/1.0.0', (err, conn) => {
       if (err) return cb(err)
       const rpc = new RPC()
       rpc.setup(conn, err => {
         if (err) return cb(err)
-        this.state.manage(rpc)
-        this.state.syncState(cb)
+
+        this.rpc.push(rpc)
+        this.rpcById[rpc.id] = rpc
+
+        rpc.cursors = {}
+        rpc.registrations = {}
+
+        log('add new peer %s', rpc.id)
+        this._syncAll(cb)
       })
     })
+  }
+
+  _cleanPeers () {
+    this.rpc = this.rpc.filter(peer => {
+      if (peer.online) return true
+      log('drop disconnected peer %s', peer.id)
+      delete this.rpcById[peer.id]
+      return false
+    })
+  }
+
+  _syncAll (cb) {
+    each(Object.keys(this.state), (s, cb) => this.state[s].syncState(cb), cb)
   }
 
   register (ns, peer, ttl, cb) {
@@ -40,7 +75,7 @@ class RendezvousDiscovery {
       peer = this.swarm.peerInfo
     }
 
-    this.state.register(ns, peer, ttl, cb)
+    this._getState(peer.id.toBytes()).register(ns, peer, ttl, cb)
   }
 
   discover (ns, limit, /* cookie, */ cb) {
@@ -60,7 +95,7 @@ class RendezvousDiscovery {
       ns = null
     }
 
-    this.state.discover(ns, limit, cb)
+    this._cleanPeers()
   }
 
   unregister (ns, id) {
@@ -72,20 +107,20 @@ class RendezvousDiscovery {
       id = this.swarm.peerInfo.id.toBytes()
     }
 
-    this.state.unregister(ns, id)
+    this._getState(id).unregister(ns)
   }
 
   start (cb) {
-    this.state = new State(this)
+    this.state = {}
     cb()
   }
 
   stop (cb) {
-    this.state.shutdown(err => {
-      if (err) return cb(err)
-      this.state = null
-      cb()
-    })
+    this.rpc.filter(rpc => rpc.online).forEach(rpc => rpc.end())
+    this.state = null
+    this.rpc = []
+    this.rpcById = {}
+    cb()
   }
 }
 
