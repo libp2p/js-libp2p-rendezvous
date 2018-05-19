@@ -19,6 +19,7 @@ class RendezvousDiscovery {
     this.swarm = swarm
     this.rpc = []
     this.rpcById = {}
+    this.rpcRace = {}
     this.swarm.on('peer:connect', peer => {
       this._dial(peer)
     })
@@ -35,10 +36,11 @@ class RendezvousDiscovery {
     cb = once(cb)
     if (!this.state) return cb()
     this._cleanPeers()
-    if (this.rpcById[pi.id.toB58String()]) {
+    if (this.rpcById[pi.id.toB58String()] || this.rpcRace[pi.id.toB58String()]) {
       log('skip reconnecting %s', pi.id.toB58String())
       return cb()
     }
+    this.rpcRace[pi.id.toB58String()] = true
     this.swarm.dialProtocol(pi, '/rendezvous/1.0.0', (err, conn) => {
       if (err) return cb(err)
       const rpc = new RPC()
@@ -52,6 +54,7 @@ class RendezvousDiscovery {
         rpc.registrations = {}
 
         log('add new peer %s', rpc.id)
+        delete this.rpcRace[pi.id.toB58String()]
         this._syncAll(cb)
       })
     })
@@ -126,6 +129,7 @@ class RendezvousDiscovery {
     this.state = null
     this.rpc = []
     this.rpcById = {}
+    this.rpcRace = {}
     cb()
   }
 }
