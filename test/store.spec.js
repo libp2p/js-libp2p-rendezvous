@@ -1,5 +1,8 @@
 /* eslint-env mocha */
 const assert = require('assert')
+const PeerInfo = require('peer-info')
+const PeerID = require('peer-id')
+const multiaddr = require('multiaddr')
 
 const {
   createStore,
@@ -35,14 +38,18 @@ const assertRevisionNumber = (store, numberOfRevision) => {
   assert.equal(store.get('_rev'), numberOfRevision)
 }
 
-const createPeer = () => {
-  return {
-    id: 'QmPeerID',
-    addrs: ['/ip4/127.0.0.1/tcp/0'],
-    ttl: 60,
-    received_at: DateNow()
-  }
-}
+const createPeerRecord = () => new Promise((resolve, reject) => {
+  PeerID.create({bits: 512}, (err, id) => {
+    if (err) reject(err)
+    const peer = new PeerInfo(id)
+    peer.multiaddrs.add(multiaddr('/ip4/127.0.0.1/tcp/0'))
+    resolve({
+      peer: peer,
+      ttl: 60,
+      received_at: DateNow()
+    })
+  })
+})
 
 const DateNow = () => new Date('2018-05-17T13:00:00.000Z')
 
@@ -78,58 +85,59 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 0)
   })
-  it('add duplicate namespace wont clear existing peers', () => {
-    const peer = createPeer()
+  it('add duplicate namespace wont clear existing peers', async () => {
+    const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
-    store = addPeerToNamespace(store, 'my-app', peer)
+    store = addPeerToNamespace(store, 'my-app', peerRecord)
     store = createNamespace(store, 'my-app')
 
     assertRevisionNumber(store, 1)
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 1)
   })
-  it('can add peer to global namespace', () => {
-    const peer = createPeer()
+  it('can add peer to global namespace', async () => {
+    const peerRecord = await createPeerRecord()
     let store = createStore()
-    store = addPeer(store, peer)
+    store = addPeer(store, peerRecord)
 
     assertRevisionNumber(store, 1)
     assertNumberOfNamespaces(store, 0)
     assertNumberOfPeers(store, 1)
   })
-  it('can remove peer from global namespace', () => {
-    const peer = createPeer()
+  it('can remove peer from global namespace', async () => {
+    const peerRecord = await createPeerRecord()
     let store = createStore()
-    store = addPeer(store, peer)
-    store = removePeer(store, peer.id)
+    store = addPeer(store, peerRecord)
+    store = removePeer(store, peerRecord.peer.id)
 
     assertRevisionNumber(store, 2)
     assertNumberOfNamespaces(store, 0)
+    console.log(store)
     assertNumberOfPeers(store, 0)
   })
-  it('can add peer to namespace', () => {
-    const peer = createPeer()
+  it('can add peer to namespace', async () => {
+    const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
-    store = addPeerToNamespace(store, 'my-app', peer)
+    store = addPeerToNamespace(store, 'my-app', peerRecord)
 
     assertRevisionNumber(store, 1)
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 1)
   })
-  it('can remove peer from namespace', () => {
-    const peer = createPeer()
+  it('can remove peer from namespace', async () => {
+    const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
-    store = addPeerToNamespace(store, 'my-app', peer)
-    store = removePeerFromNamespace(store, 'my-app', peer.id)
+    store = addPeerToNamespace(store, 'my-app', peerRecord)
+    store = removePeerFromNamespace(store, 'my-app', peerRecord.peer.id.toB58String())
 
     assertRevisionNumber(store, 2)
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 0)
   })
-  it('gc clears expired peers', () => {
-    const peer = createPeer()
+  it('gc clears expired peers', async () => {
+    const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
-    store = addPeerToNamespace(store, 'my-app', peer)
+    store = addPeerToNamespace(store, 'my-app', peerRecord)
     const dateAfterExpired = new Date('2018-05-17T13:02:00.000Z')
     store = clearExpired(store, 'my-app', dateAfterExpired)
 
@@ -137,10 +145,10 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 0)
   })
-  it('gc leaves non-expired peers in store', () => {
-    const peer = createPeer()
+  it('gc leaves non-expired peers in store', async () => {
+    const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
-    store = addPeerToNamespace(store, 'my-app', peer)
+    store = addPeerToNamespace(store, 'my-app', peerRecord)
     const dateBeforeExpired = new Date('2018-05-17T13:00:00.000Z')
     store = clearExpired(store, 'my-app', dateBeforeExpired)
 

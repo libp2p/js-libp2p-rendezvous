@@ -1,13 +1,128 @@
 'use strict'
 
 const Libp2p = require('libp2p')
-const TCP = require('libp2p-tcp')
+const WS = require('libp2p-websockets')
 const MPLEX = require('libp2p-mplex')
-const SPDY = require('libp2p-spdy')
 const SECIO = require('libp2p-secio')
+const PeerID = require('peer-id')
+const PeerInfo = require('peer-info')
+const EE = require('events').EventEmitter
+const pull = require('pull-stream')
 
-const Id = require('peer-id')
-const Peer = require('peer-info')
+const defaultAddrs = ['/ip4/127.0.0.1/tcp/0/ws']
+
+const proto = require('../src/proto')
+
+const {
+  createStore
+  // createNamespace
+  // utils,
+  // addPeer,
+  // removePeer,
+  // clearExpired
+} = require('../src/server/store/immutable')
+
+const decodePeerInfoFromMessage = (msg) => {
+  const peerInfo = new PeerInfo(PeerID.createFromBytes(msg.register.peer.id))
+  msg.register.peer.addrs.forEach(ma => {
+    peerInfo.multiaddrs.add(ma)
+  })
+  return peerInfo
+}
+
+const handlers = {
+  [proto.MessageType.REGISTER]: (store, conn, msg, callback) => {
+    console.log('should add namespace?')
+    console.log('incoming peerInfo', decodePeerInfoFromMessage(msg))
+    callback(null, store)
+  }
+}
+
+class HackDiscovery {
+  constructor (swarm) {
+    this.swarm = swarm
+    this.discoveryInterface = new EE()
+    this.store = createStore()
+  }
+  start (callback) {
+    // When starting, start to handle the protocol
+    // Also start listening for incoming connections, and when that happens, try to connect to rendezvous
+    this.swarm.handle('/p2p/rendezvous/1.0.0', (protocol, conn) => {
+      // console.log('protocol', protocol)
+      // console.log('conn', conn)
+      // conn.getPeerInfo((err, pi) => {
+      //   // console.log('pi', pi)
+      // })
+      pull(conn, pull.collect((err, msg) => {
+        if (err) throw err
+        // console.log('handle', err, msg)
+        // Here is the message we received from a peer
+        // Add switch statement on what to handle here
+        const decodedMessage = proto.Message.decode(msg[0])
+        // console.log(decodedMessage)
+        if (handlers[decodedMessage.type]) {
+          // Need to respond with a success message here
+          handlers[decodedMessage.type](this.store, conn, decodedMessage, (err, store) => {
+            if (err) throw err
+            this.store = store
+          })
+        } else {
+          throw new Error('Received a message whose `type` we dont recognize')
+        }
+        if (msg.toString() === 'ping') {
+          pull(pull.values(['pong']), conn)
+        }
+      }, conn))
+    })
+    // this.swarm.on('peer-mux-established', (peer) => {
+    //   console.log('found a peer', peer)
+    // })
+    setImmediate(callback)
+  }
+  stop (callback) {
+    setImmediate(callback)
+  }
+  emit (peerInfo) {
+    this.discoveryInterface('peer', peerInfo)
+  }
+}
+// const withIs = require('class-is')
+// HackDiscovery = withIs(HackDiscovery, { className: 'HackDiscovery', symbolName: '@libp2p/js-libp2p-rendezvous' })
+
+module.exports = {
+  createRendezvousPeer: (id) => new Promise((resolve, reject) => {
+    PeerID.createFromJSON(id, (err, peerID) => {
+      if (err) return reject(err)
+      const peer = new PeerInfo(peerID)
+      defaultAddrs.forEach(a => peer.multiaddrs.add(a))
+
+      const swarm = new Libp2p({
+        transport: [
+          new WS()
+        ],
+        // discovery: [new HackDiscovery()],
+        connection: {
+          muxer: [
+            MPLEX
+          ],
+          crypto: [SECIO]
+        }
+      }, peer, null, {})
+      swarm.modules.discovery = [new HackDiscovery(swarm)]
+      // swarm.handle('/rendezvous/1.0.0', (gotConn) => {
+      //   console.log('got conn', gotConn)
+      // })
+      resolve(swarm)
+      // swarm.start(err => {
+      //   if (err) return reject(err)
+      //   resolve(swarm)
+      // })
+    })
+  })
+}
+
+/*
+const SPDY = require('libp2p-spdy')
 
 const Server = require('../src/server')
 const Client = require('../src')
@@ -85,3 +200,4 @@ Utils.default = cb => Utils.createServer('./server.id.json', ['/ip4/0.0.0.0/tcp/
     })
   })
 })
+*/

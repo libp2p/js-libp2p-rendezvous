@@ -1,18 +1,20 @@
 const { Map } = require('immutable')
 
 // Helper for checking if a peer has the neccessary properties
-const validatePeer = (peer) => {
-  if (!peer.id) {
-    return new Error('Missing `peer.id`')
+const validatePeerRecord = (peerRecord) => {
+  // Should validate that this is a PeerInfo instead
+  console.log(peerRecord)
+  if (!peerRecord.peer.id._id) {
+    return new Error('Missing `peerRecord.peer.id._id`')
   }
-  if (!peer.addrs) {
-    return new Error('Missing `peer.addrs`')
+  if (!peerRecord.peer.multiaddrs) {
+    return new Error('Missing `peerRecord.addrs`')
   }
-  if (!peer.ttl) {
-    return new Error('Missing `peer.ttl`')
+  if (!peerRecord.ttl) {
+    return new Error('Missing `peerRecord.ttl`')
   }
-  if (!peer.received_at) {
-    return new Error('Missing `peer.received_at`')
+  if (!peerRecord.received_at) {
+    return new Error('Missing `peerRecord.received_at`')
   }
 }
 
@@ -52,15 +54,15 @@ const createNamespace = (store, name) => {
 }
 
 // Adds a peer to a peer table within a namespace
-const addPeerToNamespace = (store, peerTableName, peerInfo) => {
-  const peerErr = validatePeer(peerInfo)
+const addPeerToNamespace = (store, peerTableName, peerRecord) => {
+  const peerErr = validatePeerRecord(peerRecord)
   if (peerErr) {
     throw new Error('Peer was not valid for adding to rendezvous namespace. ' + peerErr)
   }
   // Get a version of the peer table we can modify
   let newPeerTable = getNamespaces(store).get(peerTableName)
-  // Add the new peerInfo to the peer table
-  newPeerTable = newPeerTable.set(peerInfo.id, Map(peerInfo))
+  // Add the new peerRecord to the peer table
+  newPeerTable = newPeerTable.set(peerRecord.peer.id, Map(peerRecord))
   // We made a modification, lets increment the revision
   store = incrementRevision(store)
   // Return the new store with the new values
@@ -68,15 +70,15 @@ const addPeerToNamespace = (store, peerTableName, peerInfo) => {
 }
 
 // Add a peer to the global namespace
-const addPeer = (store, peerInfo) => {
-  const peerErr = validatePeer(peerInfo)
+const addPeer = (store, peerRecord) => {
+  const peerErr = validatePeerRecord(peerRecord)
   if (peerErr) {
     throw new Error('Peer was not valid for adding to rendezvous namespace. ' + peerErr)
   }
   // We made a modification, lets increment the revision
   store = incrementRevision(store)
   // Return the new store with the new values
-  return store.set('global_namespace', store.get('global_namespace').set(peerInfo.id, Map(peerInfo)))
+  return store.set('global_namespace', store.get('global_namespace').set(peerRecord.id, Map(peerRecord)))
 }
 
 // Removes a peer from a peer table within a namespace
