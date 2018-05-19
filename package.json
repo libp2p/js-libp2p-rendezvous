@@ -9,6 +9,9 @@
     "test:browser": "aegir test -t browser",
     "test:webworker": "aegir test -t webworker"
   },
+  "browser": {
+    "test/utils.js": "./test/utils.browser.js"
+  },
   "keywords": [
     "libp2p",
     "rendezvous",
@@ -30,7 +33,8 @@
     "libp2p-mplex": "^0.7.0",
     "libp2p-secio": "^0.10.0",
     "libp2p-spdy": "^0.12.1",
-    "libp2p-tcp": "^0.12.0"
+    "libp2p-tcp": "^0.12.0",
+    "libp2p-websockets": "^0.12.0"
   },
   "repository": {
     "type": "git",

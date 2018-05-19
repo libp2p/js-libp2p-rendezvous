@@ -1,6 +1,7 @@
 'use strict'
 
 const Libp2p = require('libp2p')
+const TCP = require('libp2p-tcp')
 const WS = require('libp2p-websockets')
 const MPLEX = require('libp2p-mplex')
 const SECIO = require('libp2p-secio')
@@ -128,14 +129,15 @@ const Server = require('../src/server')
 const Client = require('../src')
 
 const Utils = module.exports = (id, addrs, cb) => {
-  Id.createFromJSON(require(id), (err, id) => {
+  Id.createFromJSON(id, (err, id) => {
     if (err) return cb(err)
     const peer = new Peer(id)
     addrs.forEach(a => peer.multiaddrs.add(a))
 
     const swarm = new Libp2p({
       transport: [
-        new TCP()
+        new TCP(),
+        new WS()
       ],
       connection: {
         muxer: [
@@ -162,7 +164,7 @@ const Utils = module.exports = (id, addrs, cb) => {
 }
 
 Utils.id = (id, addrs, cb) => {
-  Id.createFromJSON(require(id), (err, id) => {
+  Id.createFromJSON(id, (err, id) => {
     if (err) return cb(err)
     const peer = new Peer(id)
     addrs.forEach(a => peer.multiaddrs.add(a))
@@ -190,11 +192,11 @@ Utils.createClient = (id, addrs, cb) => {
   })
 }
 
-Utils.default = cb => Utils.createServer('./server.id.json', ['/ip4/0.0.0.0/tcp/0'], {}, (err, server) => {
+Utils.default = cb => Utils.createServer(require('./server.id.json'), ['/ip4/0.0.0.0/tcp/0'], {}, (err, server) => {
   if (err) return cb(err)
-  Utils.createClient('./client.id.json', ['/ip4/0.0.0.0/tcp/0'], (err, client) => {
+  Utils.createClient(require('./client.id.json'), ['/ip4/0.0.0.0/tcp/0'], (err, client) => {
     if (err) return cb(err)
-    Utils.createClient('./client2.id.json', ['/ip4/0.0.0.0/tcp/0'], (err, client2) => {
+    Utils.createClient(require('./client2.id.json'), ['/ip4/0.0.0.0/tcp/0'], (err, client2) => {
       if (err) return cb(err)
       return cb(null, client, server, client2)
     })
