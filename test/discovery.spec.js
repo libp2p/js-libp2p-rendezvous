@@ -36,8 +36,8 @@ describe('discovery', () => {
     client.discover('hello', (err, res) => {
       if (err) return done(err)
       expect(err).to.not.exist()
-      expect(res.peers).to.have.lengthOf(1)
-      expect(res.peers[0].id.toB58String()).to.equal(client2.swarm.peerInfo.id.toB58String())
+      expect(res).to.have.lengthOf(1)
+      expect(res[0].id.toB58String()).to.equal(client2.swarm.peerInfo.id.toB58String())
       done()
     })
   })
@@ -51,7 +51,7 @@ describe('discovery', () => {
     client.discover('hello', (err, res) => {
       if (err) return done(err)
       expect(err).to.not.exist()
-      expect(res.peers).to.have.lengthOf(0)
+      expect(res).to.have.lengthOf(0)
       done()
     })
   })

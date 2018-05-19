@@ -44,7 +44,7 @@ class RendezvousDiscovery {
         this.rpc.push(rpc)
         this.rpcById[rpc.id] = rpc
 
-        rpc.cursors = {}
+        rpc.cookies = {}
         rpc.registrations = {}
 
         log('add new peer %s', rpc.id)
@@ -81,24 +81,47 @@ class RendezvousDiscovery {
     this._getState(peer.id.toBytes()).register(ns, peer, ttl, cb)
   }
 
-  discover (ns, limit, /* cookie, */ cb) {
-    /* if (typeof cookie === 'function') {
-      cb = cookie
-      cookie = Buffer.from('')
-    } */
+  discover (ns, limit, cb) {
     if (typeof limit === 'function') {
-//      cookie = Buffer.from('')
       cb = limit
       limit = 0
     }
     if (typeof ns === 'function') {
-//      cookie = Buffer.from('')
       limit = 0
       cb = ns
       ns = null
     }
 
     this._cleanPeers()
+
+    let peers = this.rpc.slice(0)
+
+    function getMore (cb) {
+      let peer = peers.shift()
+      if (!peer) return cb(new Error('No more peers left to query!'))
+      let cookie = peer.cookies[ns]
+      peer.discover(ns, limit, cookie, (err, res) => {
+        if (err) return cb(err)
+        peer.cookies[ns] = res.cookie
+        return cb(null, res.peers)
+      })
+    }
+
+    let has = []
+
+    function get () {
+      if ((limit && has.length < limit) || !peers.length) {
+        return cb(null, has)
+      }
+
+      getMore((err, peers) => {
+        if (err) log('discover:%s: %s', ns, err)
+        if (peers && peers.length) has = has.concat(peers)
+        get()
+      })
+    }
+
+    get()
   }
 
   unregister (ns, id) {
