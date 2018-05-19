@@ -22,7 +22,7 @@ class Server {
     this._stubNS = this.store.create(Buffer.alloc(256, '0').toString())
   }
 
-  start () {
+  start (cb) {
     this.gcIntv = setInterval(this.gc.bind(this), 60 * 1000)
     this.node.handle('/rendezvous/1.0.0', (proto, conn) => {
       const rpc = new RPC(this)
@@ -31,12 +31,14 @@ class Server {
         this.storeRPC(rpc)
       })
     })
+    if (cb) cb()
   }
 
-  stop () {
+  stop (cb) {
     clearInterval(this.gcIntv)
     // TODO: clear vars, shutdown conns, etc.
     this.node.unhandle('/rendezvous/1.0.0')
+    this.node.stop(cb)
   }
 
   storeRPC (rpc) {

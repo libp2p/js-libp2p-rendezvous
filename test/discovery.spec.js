@@ -65,8 +65,10 @@ describe('discovery', () => {
     parallel([client, client2].map(c => cb => c.stop(cb)), done)
   })
 
-  it('gc', () => {
-    server.gc()
-    expect(Object.keys(server.table.NS)).to.have.lengthOf(0)
-  })
+  if (Utils.createServer) {
+    it('gc', () => {
+      server.gc()
+      expect(Object.keys(server.table.NS)).to.have.lengthOf(0)
+    })
+  }
 })
