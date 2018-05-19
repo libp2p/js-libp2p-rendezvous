@@ -6,10 +6,12 @@ const {each, waterfall} = require('async')
 const noop = () => {}
 const once = require('once')
 
-class State { // TODO: add multiple peer-id logic (maybe use different states per id?)
-  constructor (main) {
+class State {
+  constructor (main, id) {
     this.rpc = main.rpc
+    this.myId = id
     this.byId = main.rpcById
+    this.cleanPeers = main._cleanPeers.bind(main)
     this.registrations = []
     this.regById = {}
   }
@@ -20,33 +22,27 @@ class State { // TODO: add multiple peer-id logic (maybe use different states pe
     this.registrations.push(this.regById[ns])
     this.syncState(cb)
   }
-  unregister (ns /*, id */) {
+  unregister (ns) {
+    if (!this.regById[ns]) throw new Error('NS ' + JSON.stringify(ns) + ' not registered!') // TODO: should this throw?
     delete this.regById[ns]
     this.registrations = this.registrations.filter(r => r.ns !== ns)
     this.syncState(noop)
   }
-  manage (rpc) {
-    this.rpc.push(rpc)
-    this.byId[rpc.id] = rpc
-
-    rpc.cursors = {}
-    rpc.registrations = []
-
-    log('manage peer %s', rpc.id)
+  rpcReg (rpc, set) {
+    if (set) {
+      rpc.registrations[this.myId] = set
+    }
+    if (!rpc.registrations[this.myId]) rpc.registrations[this.myId] = []
+    return rpc.registrations[this.myId]
   }
   syncState (cb) {
     if (!cb) cb = noop
     cb = once(cb)
-    this.rpc = this.rpc.filter(peer => {
-      if (peer.online) return true
-      log('drop disconnected peer %s', peer.id)
-      delete this.byId[peer.id]
-      return false
-    })
+    this.cleanPeers()
     log('syncing state with %s peer(s)', this.rpc.length)
     each(this.rpc, (rpc, cb) => {
-      let toRegister = this.registrations.filter(r => rpc.registrations.indexOf(r.ns) === -1)
-      let toUnregister = rpc.registrations.filter(r => !this.regById[r])
+      let toRegister = this.registrations.filter(r => this.rpcReg(rpc).indexOf(r.ns) === -1)
+      let toUnregister = this.rpcReg(rpc).filter(r => !this.regById[r])
       waterfall([
         cb => each(toRegister, (reg, cb) => {
           log('sync@%s: register %s', rpc.id, reg.ns)
@@ -54,9 +50,13 @@ class State { // TODO: add multiple peer-id logic (maybe use different states pe
         }, e => cb(e)),
         cb => each(toUnregister, (regId, cb) => {
           log('sync@%s: unregister', rpc.id, regId)
-          delete rpc.cursors[regId]
-          rpc.register(regId, cb)
-        }, e => cb(e))
+          rpc.unregister(regId, Buffer.from(this.myId, 'hex')) // TODO: shouldn't this be async?
+          cb()
+        }, e => cb(e)),
+        cb => {
+          this.rpcReg(rpc, this.rpcReg(rpc).filter(r => toUnregister.indexOf(r) === -1).concat(toRegister.map(r => r.ns)))
+          cb()
+        }
       ], cb)
     }, cb)
   }
