@@ -6,7 +6,7 @@ const once = require('once')
 const debug = require('debug')
 const log = debug('libp2p:rendezvous')
 const State = require('./state')
-const {each, map} = require('async')
+const {each} = require('async')
 
 class RendezvousDiscovery {
   constructor (swarm) {
