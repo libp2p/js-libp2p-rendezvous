@@ -3,8 +3,7 @@ const { Map } = require('immutable')
 // Helper for checking if a peer has the neccessary properties
 const validatePeerRecord = (peerRecord) => {
   // Should validate that this is a PeerInfo instead
-  console.log(peerRecord)
-  if (!peerRecord.peer.id._id) {
+  if (!peerRecord.peer.id.toB58String) {
     return new Error('Missing `peerRecord.peer.id._id`')
   }
   if (!peerRecord.peer.multiaddrs) {
@@ -62,7 +61,7 @@ const addPeerToNamespace = (store, peerTableName, peerRecord) => {
   // Get a version of the peer table we can modify
   let newPeerTable = getNamespaces(store).get(peerTableName)
   // Add the new peerRecord to the peer table
-  newPeerTable = newPeerTable.set(peerRecord.peer.id, Map(peerRecord))
+  newPeerTable = newPeerTable.set(peerRecord.peer.id.toB58String(), Map(peerRecord))
   // We made a modification, lets increment the revision
   store = incrementRevision(store)
   // Return the new store with the new values
@@ -78,7 +77,7 @@ const addPeer = (store, peerRecord) => {
   // We made a modification, lets increment the revision
   store = incrementRevision(store)
   // Return the new store with the new values
-  return store.set('global_namespace', store.get('global_namespace').set(peerRecord.id, Map(peerRecord)))
+  return store.set('global_namespace', store.get('global_namespace').set(peerRecord.peer.id.toB58String(), Map(peerRecord)))
 }
 
 // Removes a peer from a peer table within a namespace
@@ -102,7 +101,7 @@ const removePeer = (store, peerID) => {
 }
 
 // Checks all the ttls and removes peers that are expired
-const clearExpired = (store, peerTableName, currentTime) => {
+const clearExpiredFromNamespace = (store, peerTableName, currentTime) => {
   // Get the peer table
   const peerTable = getNamespaces(store).get(peerTableName)
   // Go through all peers
@@ -117,12 +116,39 @@ const clearExpired = (store, peerTableName, currentTime) => {
 
     // If it's less than zero, peer has expired and we should remove it
     if (diffInSeconds < 0) {
-      return removePeerFromNamespace(accStore, peerTableName, v.get('id'))
+      return removePeerFromNamespace(accStore, peerTableName, v.get('peer').id.toB58String())
     }
     return accStore
   }, store)
   // Return the new store with new values
   return newStore
+}
+
+// Checks all the ttls and removes peers that are expired
+const clearExpiredFromGlobalNamespace = (store, currentTime) => {
+  // Go through all peers
+  const newStore = store.get('global_namespace').reduce((accStore, v) => {
+    const expiresAt = new Date(v.get('received_at'))
+
+    // Add TTL seconds to date to get when it should expire
+    expiresAt.setSeconds(expiresAt.getSeconds() + v.get('ttl'))
+
+    // Get amount of seconds diff with current time
+    const diffInSeconds = (expiresAt - currentTime) / 1000
+
+    // If it's less than zero, peer has expired and we should remove it
+    if (diffInSeconds < 0) {
+      return removePeer(accStore, v.get('id'))
+    }
+    return accStore
+  }, store)
+  // Return the new store with new values
+  return newStore
+}
+
+const clearExpired = (store, peerTableName, currentTime) => {
+  const newStore = clearExpiredFromGlobalNamespace(store, currentTime)
+  return clearExpiredFromNamespace(newStore, peerTableName, currentTime)
 }
 
 module.exports = {

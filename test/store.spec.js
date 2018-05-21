@@ -108,11 +108,10 @@ describe('immutable store', () => {
     const peerRecord = await createPeerRecord()
     let store = createStore()
     store = addPeer(store, peerRecord)
-    store = removePeer(store, peerRecord.peer.id)
+    store = removePeer(store, peerRecord.peer.id.toB58String())
 
     assertRevisionNumber(store, 2)
     assertNumberOfNamespaces(store, 0)
-    console.log(store)
     assertNumberOfPeers(store, 0)
   })
   it('can add peer to namespace', async () => {
@@ -144,6 +143,7 @@ describe('immutable store', () => {
     assertRevisionNumber(store, 2)
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 0)
+    assertNumberOfPeers(store, 0)
   })
   it('gc leaves non-expired peers in store', async () => {
     const peerRecord = await createPeerRecord()
@@ -155,5 +155,6 @@ describe('immutable store', () => {
     assertRevisionNumber(store, 1)
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 1)
+    // console.log(JSON.stringify(store.toJSON(), null, 2))
   })
 })
