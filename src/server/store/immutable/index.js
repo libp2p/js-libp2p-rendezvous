@@ -102,6 +102,7 @@ const removePeer = (store, peerID) => {
   return store.set('global_namespace', store.get('global_namespace').delete(peerID))
 }
 
+// Removes a namespace
 const removeNamespace = (store, peerTableName) => {
   // We made a modification, lets increment the revision
   store = incrementRevision(store)

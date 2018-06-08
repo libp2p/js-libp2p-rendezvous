@@ -71,13 +71,34 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
 
     }
 
-    store = Store.addPeerToNamespace(store, Store.createNamespace(store, ns), record)
+    store = Store.addPeerToNamespace(store, Store.createNamespace(store, ns), record) // TODO: should this add to global ns too?
 
     return [store, makeResponse('register', makeStatus(ResponseStatus.OK))]
+  },
+  [MessageType.UNREGISTER]: (pi, id, Store, store, msg) => {
+    let ns = msg.unregister.ns
+    log('unregister@%s: unregister from %s', id, ns || '<GLOBAL>')
+
+    if (ns) {
+      store = Store.removePeerFromNamespace(store, ns, id)
+    } else {
+      store = Store.removePeer(store, id)
+    }
+
+    return [store]
+  },
+  [MessageType.DISCOVER]: (pi, id, Store, store, msg) => { // TODO: figure out what to use as cookie
+    let {ns, limit, cookie} = msg.discover
+    log('discover@%s: discover on %s', id, ns)
+
+    if (limit <= 0 || limit > MAX_LIMIT) limit = MAX_LIMIT
+    return [store, makeResponse('discover', {
+      registrations: []
+    })]
   }
 }
 
-const rpc = (pi, main) => {
+const RPC = (pi, main) => {
   let id = pi.id.toB58String()
 
   return pull(
@@ -87,7 +108,7 @@ const rpc = (pi, main) => {
       if (!handler) return log('ignore@%s: invalid/unknown type %s', id, data.type) // ignore msg
       let [store, resp] = handler(pi, id, main.Store, main.store, data)
       if (resp) this.queue(resp)
-      main.store = store
+      main.store = store // update store
     }, end => {
       log('end@%s: %s', id, end)
     }),
@@ -97,7 +118,7 @@ const rpc = (pi, main) => {
 
 // CODE BELOW IS NOT USED, REMOVED SOON
 
-class RPC {
+class rpc {
   constructor (main) {
     this.main = main
     this.source = Pushable()
