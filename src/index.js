@@ -2,52 +2,126 @@
 
 const RPC = require('./rpc')
 const noop = () => {}
+const once = require('once')
+const debug = require('debug')
+const log = debug('libp2p:rendezvous')
+const State = require('./state')
+const {each} = require('async')
 
 class RendezvousDiscovery {
   constructor (swarm) {
     this.swarm = swarm
-    this.peers = []
+    this.rpc = []
+    this.rpcById = {}
+    this.rpcRace = {}
+    this.swarm.on('peer:connect', peer => {
+      this._dial(peer)
+    })
+  }
+
+  _getState (id) {
+    id = id.toString('hex')
+    if (!this.state[id]) return (this.state[id] = new State(this, id))
+    return this.state[id]
   }
 
   _dial (pi, cb) {
     if (!cb) cb = noop
+    cb = once(cb)
+    if (!this.state) return cb()
+    this._cleanPeers()
+    if (this.rpcById[pi.id.toB58String()] || this.rpcRace[pi.id.toB58String()]) {
+      log('skip reconnecting %s', pi.id.toB58String())
+      return cb()
+    }
+    this.rpcRace[pi.id.toB58String()] = true
     this.swarm.dialProtocol(pi, '/rendezvous/1.0.0', (err, conn) => {
       if (err) return cb(err)
       const rpc = new RPC()
       rpc.setup(conn, err => {
         if (err) return cb(err)
-        this.peers.push(rpc)
-        cb()
+
+        this.rpc.push(rpc)
+        this.rpcById[rpc.id] = rpc
+
+        rpc.cookies = {}
+        rpc.registrations = {}
+
+        log('add new peer %s', rpc.id)
+        delete this.rpcRace[pi.id.toB58String()]
+        this._syncAll(cb)
       })
     })
   }
 
-  _rpc (cmd, ...a) { // TODO: add. round-robin / multicast / anycast?
-    this.peers[0][cmd](...a)
+  _cleanPeers () {
+    this.rpc = this.rpc.filter(peer => {
+      if (peer.online) return true
+      log('drop disconnected peer %s', peer.id)
+      delete this.rpcById[peer.id]
+      return false
+    })
   }
 
-  register (ns, peer, cb) {
-    this._rpc('register', ns, peer, 0, cb) // TODO: interface does not expose ttl option?!
+  _syncAll (cb) {
+    each(Object.keys(this.state), (s, cb) => this.state[s].syncState(cb), cb)
   }
 
-  discover (ns, limit, cookie, cb) {
-    if (typeof cookie === 'function') {
-      cb = cookie
-      cookie = Buffer.from('')
+  register (ns, peer, ttl, cb) {
+    if (typeof ttl === 'function') {
+      cb = ttl
+      ttl = 0
     }
+    if (typeof peer === 'function') {
+      ttl = 0
+      cb = peer
+      peer = this.swarm.peerInfo
+    }
+
+    this._getState(peer.id.toBytes()).register(ns, peer, ttl, cb)
+  }
+
+  discover (ns, limit, cb) {
     if (typeof limit === 'function') {
-      cookie = Buffer.from('')
       cb = limit
       limit = 0
     }
     if (typeof ns === 'function') {
-      cookie = Buffer.from('')
       limit = 0
       cb = ns
       ns = null
     }
 
-    this._rpc('discover', ns, limit, cookie, cb)
+    this._cleanPeers()
+
+    let peers = this.rpc.slice(0)
+
+    function getMore (cb) {
+      let peer = peers.shift()
+      if (!peer) return cb(new Error('No more peers left to query!'))
+      let cookie = peer.cookies[ns]
+      peer.discover(ns, limit, cookie, (err, res) => {
+        if (err) return cb(err)
+        peer.cookies[ns] = res.cookie
+        return cb(null, res.peers)
+      })
+    }
+
+    let has = []
+
+    function get () {
+      if ((limit && has.length < limit) || !peers.length) {
+        return cb(null, has)
+      }
+
+      getMore((err, peers) => {
+        if (err) log('discover:%s: %s', ns, err)
+        if (peers && peers.length) has = has.concat(peers)
+        get()
+      })
+    }
+
+    get()
   }
 
   unregister (ns, id) {
@@ -59,18 +133,20 @@ class RendezvousDiscovery {
       id = this.swarm.peerInfo.id.toBytes()
     }
 
-    this._rpc('unregister', ns, id)
+    this._getState(id).unregister(ns)
   }
 
   start (cb) {
-    this.swarm.on('peer:connect', peer => {
-      this._dial(peer)
-    })
+    this.state = {}
     cb()
   }
 
   stop (cb) {
-    // TODO: shutdown all conns
+    this.rpc.filter(rpc => rpc.online).forEach(rpc => rpc.end())
+    this.state = null
+    this.rpc = []
+    this.rpcById = {}
+    this.rpcRace = {}
     cb()
   }
 }

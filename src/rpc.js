@@ -30,6 +30,11 @@ class RPC {
       register: []
     }
   }
+  end () {
+    if (this.online) {
+      this.source.end()
+    }
+  }
   sink (read) {
     const next = (end, msg, doend) => {
       if (doend) {

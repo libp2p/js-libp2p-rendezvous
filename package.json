@@ -6,6 +6,9 @@
   "scripts": {
     "test": "aegir test"
   },
+  "browser": {
+    "test/utils.js": "./test/utils.browser.js"
+  },
   "keywords": [
     "libp2p",
     "rendezvous",
@@ -21,12 +24,13 @@
     "pull-protocol-buffers": "^0.1.2"
   },
   "devDependencies": {
-    "aegir": "^13.1.0",
-    "libp2p": "^0.20.2",
+    "aegir": "^14.0.0",
+    "libp2p": "^0.20.4",
     "libp2p-mplex": "^0.7.0",
     "libp2p-secio": "^0.10.0",
     "libp2p-spdy": "^0.12.1",
-    "libp2p-tcp": "^0.12.0"
+    "libp2p-tcp": "^0.12.0",
+    "libp2p-websockets": "^0.12.0"
   },
   "repository": {
     "type": "git",
