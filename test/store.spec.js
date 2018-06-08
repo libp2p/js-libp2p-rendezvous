@@ -1,4 +1,7 @@
+'use strict'
+
 /* eslint-env mocha */
+
 const assert = require('assert')
 const PeerInfo = require('peer-info')
 const PeerID = require('peer-id')
@@ -12,11 +15,12 @@ const {
   addPeerToNamespace,
   removePeer,
   removePeerFromNamespace,
-  clearExpired
+  clearExpired,
+  clearEmptyNamespaces,
+  clearEmpty
 } = require('../src/server/store/immutable')
 
-const getNamespaces = utils.getNamespaces
-// const setNamespaces = utils.setNamespaces
+const { getNamespaces } = utils
 
 // Helper for asserting the number of namespaces
 const assertNumberOfNamespaces = (store, numberOfNamespaces) => {
@@ -60,6 +64,7 @@ describe('immutable store', () => {
     assertRevisionNumber(store, 0)
     assertNumberOfNamespaces(store, 0)
   })
+
   it('add namespace', () => {
     const store = createNamespace(createStore(), 'my-app')
 
@@ -67,6 +72,7 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 0)
   })
+
   it('add multiple namespaces', () => {
     let store = createStore()
     store = createNamespace(store, 'my-app-1')
@@ -76,6 +82,7 @@ describe('immutable store', () => {
     assertRevisionNumber(store, 0)
     assertNumberOfNamespaces(store, 3)
   })
+
   it('add duplicated namespace', () => {
     let store = createStore()
     store = createNamespace(store, 'my-app')
@@ -85,6 +92,7 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 0)
   })
+
   it('add duplicate namespace wont clear existing peers', async () => {
     const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
@@ -95,6 +103,7 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 1)
   })
+
   it('can add peer to global namespace', async () => {
     const peerRecord = await createPeerRecord()
     let store = createStore()
@@ -104,6 +113,7 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 0)
     assertNumberOfPeers(store, 1)
   })
+
   it('can remove peer from global namespace', async () => {
     const peerRecord = await createPeerRecord()
     let store = createStore()
@@ -114,6 +124,7 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 0)
     assertNumberOfPeers(store, 0)
   })
+
   it('can add peer to namespace', async () => {
     const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
@@ -123,6 +134,7 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 1)
   })
+
   it('can remove peer from namespace', async () => {
     const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
@@ -133,6 +145,7 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 0)
   })
+
   it('gc clears expired peers', async () => {
     const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
@@ -145,6 +158,7 @@ describe('immutable store', () => {
     assertNumberOfPeersInNamespace(store, 'my-app', 0)
     assertNumberOfPeers(store, 0)
   })
+
   it('gc leaves non-expired peers in store', async () => {
     const peerRecord = await createPeerRecord()
     let store = createNamespace(createStore(), 'my-app')
@@ -156,5 +170,15 @@ describe('immutable store', () => {
     assertNumberOfNamespaces(store, 1)
     assertNumberOfPeersInNamespace(store, 'my-app', 1)
     // console.log(JSON.stringify(store.toJSON(), null, 2))
+  })
+
+  it('gc clears empty namespace', async () => {
+    const peerRecord = await createPeerRecord()
+    let store = createNamespace(createNamespace(createStore(), 'my-app'), 'my-app-2')
+    store = addPeerToNamespace(store, 'my-app', peerRecord)
+    store = clearEmptyNamespaces(store)
+
+    assertRevisionNumber(store, 2)
+    assertNumberOfNamespaces(store, 1)
   })
 })

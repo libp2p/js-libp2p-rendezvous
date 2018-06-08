@@ -59,16 +59,7 @@ class Server {
   }
 
   gc () {
-    Object.keys(this.table.NS).forEach(ns => {
-      const n = this.table.NS[ns]
-      const removed = n.gc()
-      if (n.useless) {
-        log('drop NS %s because it is empty', n.name)
-        delete this.table.NS[ns]
-      } else {
-        if (removed) n.update()
-      }
-    })
+    
   }
 }
 

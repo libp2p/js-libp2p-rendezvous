@@ -1,3 +1,5 @@
+'use strict'
+
 const { Map } = require('immutable')
 
 // Helper for checking if a peer has the neccessary properties
@@ -100,6 +102,13 @@ const removePeer = (store, peerID) => {
   return store.set('global_namespace', store.get('global_namespace').delete(peerID))
 }
 
+const removeNamespace = (store, peerTableName) => {
+  // We made a modification, lets increment the revision
+  store = incrementRevision(store)
+  // Return the new store with new values
+  return setNamespaces(store, getNamespaces(store).delete(peerTableName))
+}
+
 // Checks all the ttls and removes peers that are expired
 const clearExpiredFromNamespace = (store, peerTableName, currentTime) => {
   // Get the peer table
@@ -151,14 +160,26 @@ const clearExpired = (store, peerTableName, currentTime) => {
   return clearExpiredFromNamespace(newStore, peerTableName, currentTime)
 }
 
+const clearEmptyNamespaces = (store) => {
+  getNamespaces(store).forEach((ns, id) => { // TODO: use .reduce
+    if (!ns.size) {
+      store = removeNamespace(store, id)
+    }
+  })
+
+  return store
+}
+
 module.exports = {
   createStore: createRevisionStore,
-  createNamespace: createNamespace,
-  addPeer: addPeer,
-  addPeerToNamespace: addPeerToNamespace,
-  removePeer: removePeer,
-  removePeerFromNamespace: removePeerFromNamespace,
-  clearExpired: clearExpired,
+  createNamespace,
+  addPeer,
+  addPeerToNamespace,
+  removePeer,
+  removePeerFromNamespace,
+  removeNamespace,
+  clearEmptyNamespaces,
+  clearExpired,
   utils: {
     getNamespaces,
     setNamespaces
