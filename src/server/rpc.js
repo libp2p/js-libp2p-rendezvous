@@ -22,23 +22,6 @@ const registerErrors = {
   300: 'Internal Server Error'
 }
 
-// Helper for checking if a peer has the neccessary properties
-const validatePeerRecord = (peerRecord) => {
-  // Should validate that this is a PeerInfo instead
-  if (!peerRecord.peer.id.toB58String) {
-    return new Error('Missing `peerRecord.peer.id._id`')
-  }
-  if (!peerRecord.peer.multiaddrs) {
-    return new Error('Missing `peerRecord.addrs`')
-  }
-  if (!peerRecord.ttl) {
-    return new Error('Missing `peerRecord.ttl`')
-  }
-  if (!peerRecord.received_at) {
-    return new Error('Missing `peerRecord.received_at`')
-  }
-}
-
 const makeStatus = (status) => {
   return {
     status,
@@ -76,8 +59,6 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
       ttl,
       received_at: Date.now()
     }
-
-    validatePeerRecord(record) // self-check
 
     if (ns) {
       store = Store.addPeerToNamespace(store, Store.createNamespace(store, ns), record) // TODO: should this add to global ns too?
