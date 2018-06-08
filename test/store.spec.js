@@ -20,42 +20,17 @@ const {
   clearEmpty
 } = require('../src/server/store/immutable')
 
-const { getNamespaces } = utils
+const Utils = require('./utils2')
 
-// Helper for asserting the number of namespaces
-const assertNumberOfNamespaces = (store, numberOfNamespaces) => {
-  assert.equal(Object.keys(getNamespaces(store).toJSON()).length, numberOfNamespaces)
-}
+const {
+  assertNumberOfNamespaces,
+  assertNumberOfPeersInNamespace,
+  assertNumberOfPeers,
+  assertRevisionNumber,
+  createPeerRecord
+} = Utils
 
-// Helper for asserting the number of peers in a namespace
-const assertNumberOfPeersInNamespace = (store, namespace, numberOfPeers) => {
-  assert.equal(Object.keys(getNamespaces(store).get(namespace).toJSON()).length, numberOfPeers)
-}
-
-// Helper for asserting the number of peers in the global namespace
-const assertNumberOfPeers = (store, numberOfPeers) => {
-  assert.equal(Object.keys(store.get('global_namespace').toJSON()).length, numberOfPeers)
-}
-
-// Helper for asserting which revision we're currently at
-const assertRevisionNumber = (store, numberOfRevision) => {
-  assert.equal(store.get('_rev'), numberOfRevision)
-}
-
-const createPeerRecord = () => new Promise((resolve, reject) => {
-  PeerID.create({bits: 512}, (err, id) => {
-    if (err) reject(err)
-    const peer = new PeerInfo(id)
-    peer.multiaddrs.add(multiaddr('/ip4/127.0.0.1/tcp/0'))
-    resolve({
-      peer: peer,
-      ttl: 60,
-      received_at: DateNow()
-    })
-  })
-})
-
-const DateNow = () => new Date('2018-05-17T13:00:00.000Z')
+const DateNow = Utils.DateNow = () => new Date('2018-05-17T13:00:00.000Z') // mock date
 
 describe('immutable store', () => {
   it('starts with no revisions', () => {
