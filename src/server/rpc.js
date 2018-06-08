@@ -11,7 +11,7 @@ const Id = require('peer-id')
 const through = require('pull-through')
 
 const MAX_NS_LENGTH = 255 // TODO: spec this
-const MAX_LIMIT = 1000 // TODO: spec this
+const MAX_DISCOVER_LIMIT = 1000 // TODO: spec this
 
 const registerErrors = {
   100: 'Invalid namespace provided',
@@ -71,7 +71,11 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
 
     }
 
-    store = Store.addPeerToNamespace(store, Store.createNamespace(store, ns), record) // TODO: should this add to global ns too?
+    if (ns) {
+      store = Store.addPeerToNamespace(store, Store.createNamespace(store, ns), record) // TODO: should this add to global ns too?
+    } else {
+      store = Store.addPeer(store, record)
+    }
 
     return [store, makeResponse('register', makeStatus(ResponseStatus.OK))]
   },
@@ -91,7 +95,7 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
     let {ns, limit, cookie} = msg.discover
     log('discover@%s: discover on %s', id, ns)
 
-    if (limit <= 0 || limit > MAX_LIMIT) limit = MAX_LIMIT
+    if (limit <= 0 || limit > MAX_DISCOVER_LIMIT) limit = MAX_DISCOVER_LIMIT
     return [store, makeResponse('discover', {
       registrations: []
     })]
@@ -188,7 +192,7 @@ class rpc {
           try {
             // TODO: add more errors
             log('discover@%s: discover on %s', this.id, msg.discover.ns)
-            if (msg.discover.limit <= 0 || msg.discover.limit > MAX_LIMIT) msg.discover.limit = MAX_LIMIT
+            if (msg.discover.limit <= 0 || msg.discover.limit > MAX_DISCOVER_LIMIT) msg.discover.limit = MAX_DISCOVER_LIMIT
             const {peers, cookie} = this.main.getNS(msg.discover.ns).getPeers(msg.discover.cookie || Buffer.from(''), msg.discover.limit, this.id)
             log('discover@%s: got %s peers', this.id, peers.length)
             this.source.push({
