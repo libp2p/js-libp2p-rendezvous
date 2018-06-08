@@ -53,13 +53,13 @@ const makeResponse = (type, data) => {
 
 const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, store, msg) and returns [newStore, responseOrNull]
   [MessageType.REGISTER]: (pi, id, Store, store, msg) => {
-    let ns = msg.register.ns
+    let {ns, peer, ttl} = msg.register
     log('register@%s: trying register on %s', id, ns)
-    if (msg.register.peer.id && new Id(msg.register.peer.id).toB58String() !== this.id) { // check if this peer really owns address (TODO: get rid of that)
-      log('register@%s: auth err (want %s)', id, new Id(msg.register.peer.id).toB58String())
+    if (peer.id && new Id(peer.id).toB58String() !== this.id) { // check if this peer really owns address (TODO: get rid of that)
+      log('register@%s: auth err (want %s)', id, new Id(peer.id).toB58String())
       return [store, makeResponse('request', makeStatus(ResponseStatus.E_NOT_AUTHORIZED))]
-    } else if (!msg.register.peer.id) {
-      msg.register.peer.id = pi.id.toBytes() // field is optional so add it before
+    } else if (!peer.id) {
+      peer.id = pi.id.toBytes() // field is optional so add it before creating the record
     }
 
     if (ns > MAX_NS_LENGTH) {
@@ -67,8 +67,13 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
       return [store, makeResponse('register', makeStatus(ResponseStatus.E_INVALID_NAMESPACE))]
     }
 
-    let record = { // TODO: add
+    pi = new Peer(new Id(peer.id))
+    peer.addrs.forEach(a => pi.multiaddrs.add(a))
 
+    let record = {
+      peer,
+      ttl,
+      received_at: Date.now()
     }
 
     if (ns) {

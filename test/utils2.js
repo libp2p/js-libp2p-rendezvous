@@ -32,7 +32,7 @@ const createPeerRecord = () => new Promise((resolve, reject) => {
     const peer = new Peer(id)
     peer.multiaddrs.add(multiaddr('/ip4/127.0.0.1/tcp/0'))
     resolve({
-      peer: peer,
+      peer,
       ttl: 60,
       received_at: (module.exports.DateNow || Date.now)()
     })
