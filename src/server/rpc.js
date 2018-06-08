@@ -8,6 +8,7 @@ const debug = require('debug')
 const log = debug('libp2p-rendezvous:server:rpc')
 const Peer = require('peer-info')
 const Id = require('peer-id')
+const through = require('pull-through')
 
 const MAX_NS_LENGTH = 255 // TODO: spec this
 const MAX_LIMIT = 1000 // TODO: spec this
@@ -21,12 +22,80 @@ const registerErrors = {
   300: 'Internal Server Error'
 }
 
-const craftStatus = (status) => {
+// Helper for checking if a peer has the neccessary properties
+const validatePeer = (peer) => {
+  if (!peer.id) {
+    return new Error('Missing `peer.id`')
+  }
+  if (!peer.addrs) {
+    return new Error('Missing `peer.addrs`')
+  }
+  if (!peer.ttl) {
+    return new Error('Missing `peer.ttl`')
+  }
+  if (!peer.received_at) {
+    return new Error('Missing `peer.received_at`')
+  }
+}
+
+const makeStatus = (status) => {
   return {
     status,
     statusText: registerErrors[status]
   }
 }
+
+const makeResponse = (type, data) => {
+  let o = { type: MessageType[type.toUpperCase()] }
+  o[type.toLowerCase() + 'Response'] = data
+  return o
+}
+
+const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, store, msg) and returns [newStore, responseOrNull]
+  [MessageType.REGISTER]: (pi, id, Store, store, msg) => {
+    let ns = msg.register.ns
+    log('register@%s: trying register on %s', id, ns)
+    if (msg.register.peer.id && new Id(msg.register.peer.id).toB58String() !== this.id) { // check if this peer really owns address (TODO: get rid of that)
+      log('register@%s: auth err (want %s)', id, new Id(msg.register.peer.id).toB58String())
+      return [store, makeResponse('request', makeStatus(ResponseStatus.E_NOT_AUTHORIZED))]
+    } else if (!msg.register.peer.id) {
+      msg.register.peer.id = pi.id.toBytes() // field is optional so add it before
+    }
+
+    if (ns > MAX_NS_LENGTH) {
+      log('register@%s: ns invalid', id)
+      return [store, makeResponse('register', makeStatus(ResponseStatus.E_INVALID_NAMESPACE))]
+    }
+
+    let record = { // TODO: add
+
+    }
+
+    store = Store.addPeerToNamespace(store, Store.createNamespace(store, ns), record)
+
+    return [store, makeResponse('register', makeStatus(ResponseStatus.OK))]
+  }
+}
+
+const rpc = (pi, main) => {
+  let id = pi.id.toB58String()
+
+  return pull(
+    ppb.decode(Message),
+    through(function (data) {
+      let handler = handlers[data.type]
+      if (!handler) return log('ignore@%s: invalid/unknown type %s', id, data.type) // ignore msg
+      let [store, resp] = handler(pi, id, main.Store, main.store, data)
+      if (resp) this.queue(resp)
+      main.store = store
+    }, end => {
+      log('end@%s: %s', id, end)
+    }),
+    ppb.encode(Message)
+  )
+}
+
+// CODE BELOW IS NOT USED, REMOVED SOON
 
 class RPC {
   constructor (main) {

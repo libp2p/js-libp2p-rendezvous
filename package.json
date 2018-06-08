@@ -25,7 +25,8 @@
     "dirty-chai": "^2.0.1",
     "immutable": "4.0.0-rc.9",
     "protons": "^1.0.1",
-    "pull-protocol-buffers": "^0.1.2"
+    "pull-protocol-buffers": "^0.1.2",
+    "pull-through": "^1.0.18"
   },
   "devDependencies": {
     "aegir": "^14.0.0",
