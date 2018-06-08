@@ -23,18 +23,19 @@ const registerErrors = {
 }
 
 // Helper for checking if a peer has the neccessary properties
-const validatePeer = (peer) => {
-  if (!peer.id) {
-    return new Error('Missing `peer.id`')
+const validatePeerRecord = (peerRecord) => {
+  // Should validate that this is a PeerInfo instead
+  if (!peerRecord.peer.id.toB58String) {
+    return new Error('Missing `peerRecord.peer.id._id`')
   }
-  if (!peer.addrs) {
-    return new Error('Missing `peer.addrs`')
+  if (!peerRecord.peer.multiaddrs) {
+    return new Error('Missing `peerRecord.addrs`')
   }
-  if (!peer.ttl) {
-    return new Error('Missing `peer.ttl`')
+  if (!peerRecord.ttl) {
+    return new Error('Missing `peerRecord.ttl`')
   }
-  if (!peer.received_at) {
-    return new Error('Missing `peer.received_at`')
+  if (!peerRecord.received_at) {
+    return new Error('Missing `peerRecord.received_at`')
   }
 }
 
@@ -75,6 +76,8 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
       ttl,
       received_at: Date.now()
     }
+
+    validatePeerRecord(record) // self-check
 
     if (ns) {
       store = Store.addPeerToNamespace(store, Store.createNamespace(store, ns), record) // TODO: should this add to global ns too?
