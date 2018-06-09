@@ -82,11 +82,46 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
   },
   [MessageType.DISCOVER]: (pi, id, Store, store, msg) => { // TODO: figure out what to use as cookie
     let {ns, limit, cookie} = msg.discover
-    log('discover@%s: discover on %s', id, ns)
-
     if (limit <= 0 || limit > MAX_DISCOVER_LIMIT) limit = MAX_DISCOVER_LIMIT
+    log('discover@%s: discover on %s (%s peers)', id, ns, limit)
+
+    let nsStore
+    let registrations = []
+
+    if (ns) {
+      nsStore = Store.utils.getNamespaces(store).get(ns)
+    } else {
+      nsStore = store.get('global_namespace')
+    }
+
+    if (nsStore) {
+      if (cookie && cookie.length) { // if client gave us a cookie, try to parse it
+        cookie = parseInt(String(cookie), 10)
+      }
+      if (isNaN(cookie) || typeof cookie !== 'number') { // if cookie is invalid, set it to 0
+        cookie = 0
+      }
+      registrations = nsStore.toArray().filter(e => e.recieved_at > cookie).slice(0, limit)
+      cookie = Buffer.from(String(registrations.length ? registrations[registrations.length - 1].recieved_at : cookie)) // if we got peers then use the last peers recieved_at at value, otherwise reuse current cookie
+    } else {
+      cookie = Buffer.from('0')
+    }
+
+    if (registrations.length) {
+      registrations = registrations.map(p => {
+        return {
+          ns,
+          peer: {
+            id: p.peer.id.toBytes(),
+            addrs: p.peer.multiaddrs.toArray().map(a => a.buffer)
+          }
+        }
+      })
+    }
+
     return [store, makeResponse('discover', {
-      registrations: []
+      registrations,
+      cookie
     })]
   }
 }
