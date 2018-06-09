@@ -127,6 +127,48 @@ class Client {
       }
     })
   }
+
+  register (ns, peer, ttl, cb) {
+    if (typeof ttl === 'function') {
+      cb = ttl
+      ttl = 0
+    }
+    if (typeof peer === 'function') {
+      ttl = 0
+      cb = peer
+      peer = this.swarm.peerInfo
+    }
+
+    this.store = this.store.set('registrations', this.store.get('registrations').set(ns, {peer, ttl}))
+    this.sync()
+  }
+
+  discover (ns, limit, cb) {
+    if (typeof limit === 'function') {
+      cb = limit
+      limit = 0
+    }
+    if (typeof ns === 'function') {
+      limit = 0
+      cb = ns
+      ns = null
+    }
+
+    // TODO: add
+  }
+
+  unregister (ns, id) {
+    if (!ns) {
+      id = this.swarm.peerInfo.id.toBytes()
+      ns = null
+    }
+    if (!id) {
+      id = this.swarm.peerInfo.id.toBytes()
+    }
+
+    this.store = this.store.set('registrations', this.store.get('registrations').delete(ns))
+    this.sync()
+  }
 }
 
 module.exports = Client

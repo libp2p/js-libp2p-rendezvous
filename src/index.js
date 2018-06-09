@@ -2,10 +2,12 @@
 
 const debug = require('debug')
 const log = debug('libp2p:rendezvous')
-const EE = require('events').EventEmitter
-const Client = require('./client')
+const noop = () => {}
 
-class RendezvousDiscovery2 extends EE {
+const Client = require('./client')
+const EE = require('events').EventEmitter
+
+class RendezvousDiscovery extends EE {
   constructor (swarm, opt) {
     super()
     this._client = new Client(swarm, opt)
@@ -14,19 +16,18 @@ class RendezvousDiscovery2 extends EE {
     this.swarm.on('peer:connect', (peer) => this._client.dial(peer))
   }
   stop () {
-
+    this._client.stop()
   }
   // TODO: https://github.com/libp2p/specs/issues/47
   register (ns) {
-
+    this._client.register(ns, noop)
   }
   unregister (ns) {
-
+    this._client.unregister(ns, noop)
   }
 }
 
 const RPC = require('./rpc')
-const noop = () => {}
 const once = require('once')
 const State = require('./state')
 const {each} = require('async')
@@ -36,7 +37,7 @@ const {each} = require('async')
 // RenderzvousClient
 // RenderzvousPoint
 
-class RendezvousDiscovery {
+class RendezvousDiscovery_ {
   constructor (swarm) {
     this.swarm = swarm
     this.rpc = []
