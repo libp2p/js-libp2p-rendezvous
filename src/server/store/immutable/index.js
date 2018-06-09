@@ -162,13 +162,13 @@ const clearExpired = (store, peerTableName, currentTime) => {
 }
 
 const clearEmptyNamespaces = (store) => {
-  getNamespaces(store).forEach((ns, id) => { // TODO: use .reduce
+  return getNamespaces(store).reduce((store, ns, id) => {
     if (!ns.size) {
-      store = removeNamespace(store, id)
+      return removeNamespace(store, id)
     }
-  })
 
-  return store
+    return store
+  }, store)
 }
 
 module.exports = {
