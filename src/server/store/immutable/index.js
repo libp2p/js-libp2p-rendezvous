@@ -121,6 +121,8 @@ const clearExpiredFromNamespace = (store, peerTableName, currentTime) => {
       if (!v.get('ttl')()) {
         return removePeer(accStore, v.get('id'))
       }
+
+      return accStore
     }
 
     const expiresAt = new Date(v.get('received_at'))
@@ -150,6 +152,8 @@ const clearExpiredFromGlobalNamespace = (store, currentTime) => {
       if (!v.get('ttl')()) {
         return removePeer(accStore, v.get('id'))
       }
+
+      return accStore
     }
 
     const expiresAt = new Date(v.get('received_at'))
