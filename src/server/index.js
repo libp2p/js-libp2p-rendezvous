@@ -10,18 +10,20 @@ const RPC = require('./rpc')
 class Server {
   constructor (opt) {
     if (!opt) opt = {}
-    this.node = opt.node
+    this.swarm = opt.swarm
     this.Store = opt.store || ImmutableStore
     this.store = this.Store.createStore(opt.storeConfig || {})
     this.gcTime = opt.gcIntv || 60 * 1000
   }
 
-  start (cb) {
+  start () {
     this.gcIntv = setInterval(this.gc.bind(this), this.gcTime)
-    this.nodeHandle('/p2p/rendezvous/1.0.0', (proto, conn) => {
+    this.swarm.handle('/p2p/rendezvous/1.0.0', (proto, conn) => {
       conn.getPeerInfo((err, pi) => {
-        if (err) return cb(err)
+        if (err) return log(err)
+
         log('rpc from %s', pi.id.toB58String())
+
         pull(
           conn,
           RPC(pi, this),
@@ -29,14 +31,12 @@ class Server {
         )
       })
     })
-    this.node.start(cb)
   }
 
-  stop (cb) {
+  stop () {
     clearInterval(this.gcIntv)
     // TODO: clear vars, shutdown conns, etc.
-    this.node.unhandle('/p2p/rendezvous/1.0.0')
-    this.node.stop(cb)
+    this.swarm.unhandle('/p2p/rendezvous/1.0.0')
   }
 
   gc () {

@@ -11,6 +11,7 @@ class RendezvousDiscovery extends EE {
   constructor (swarm, opt) {
     super()
     this._client = new Client(swarm, opt)
+    this.tag = 'rendezvous'
   }
   start () {
     this.swarm.on('peer:connect', (peer) => this._client.dial(peer))
