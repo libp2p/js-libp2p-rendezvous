@@ -39,7 +39,7 @@ const removePoint = (store, id) => {
 // Clears offline points
 const clearPoints = (store) => {
   return store.get('points').reduce((store, point) => {
-    if (!point.rpc().online()) {
+    if (!point.toJS().rpc().online()) {
       return removePoint(store, point.id)
     }
 

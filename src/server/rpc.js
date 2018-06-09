@@ -39,7 +39,7 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
   [MessageType.REGISTER]: (pi, id, Store, store, msg) => {
     let {ns, peer, ttl} = msg.register
     log('register@%s: trying register on %s', id, ns)
-    if (peer.id && new Id(peer.id).toB58String() !== this.id) { // check if this peer really owns address (TODO: get rid of that)
+    if (peer.id && new Id(peer.id).toB58String() !== id) { // check if this peer really owns address (TODO: get rid of that)
       log('register@%s: auth err (want %s)', id, new Id(peer.id).toB58String())
       return [store, makeResponse('request', makeStatus(ResponseStatus.E_NOT_AUTHORIZED))]
     } else if (!peer.id) {

@@ -36,7 +36,7 @@ class Client {
         return
       }
 
-      log('dialing %s succeeded')
+      log('dialing %s succeeded', id)
     }
 
     // do the actual dialing
@@ -94,7 +94,7 @@ class Client {
       regs = regs.reduce((regs, pReg, pRegId) => {
         if (!registrations.get(pRegId)) {
           log('sync: unregister@%s: %s', id, pRegId)
-          actions.push(cb => point.rpc().unregister(pRegId, pReg.peer.id.toBytes(), cb))
+          actions.push(cb => point.toJS().rpc().unregister(pRegId, pReg.peer.id.toBytes(), cb))
           return regs.delete(pRegId)
         }
 
@@ -104,7 +104,7 @@ class Client {
       regs = registrations.reduce((regs, reg, regId) => {
         if (!regs.get(regId)) {
           log('sync: register@%s: %s', id, regId)
-          actions.push(cb => point.rpc().register(regId, reg.peer, reg.ttl, cb))
+          actions.push(cb => point.toJS().rpc().register(regId, reg.peer, reg.ttl, cb))
           return regs.set(regId, reg)
         }
 

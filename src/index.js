@@ -11,6 +11,7 @@ class RendezvousDiscovery extends EE {
   constructor (swarm, opt) {
     super()
     this._client = new Client(swarm, opt)
+    this.swarm = swarm
     this.tag = 'rendezvous'
   }
   start () {
