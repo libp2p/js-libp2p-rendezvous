@@ -20,7 +20,7 @@ const {
   clearEmpty
 } = require('../src/server/store/immutable')
 
-const Utils = require('./utils2')
+const Utils = require('./utils.store')
 
 const {
   assertNumberOfNamespaces,

@@ -3,7 +3,7 @@
 /* eslint-env mocha */
 
 const {parallel} = require('async')
-const Utils = require('./utils')
+const Utils = require('./utils.peer')
 const pull = require('pull-stream')
 const proto = require('../src/proto')
 

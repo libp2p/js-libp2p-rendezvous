@@ -1,6 +1,6 @@
 'use strict'
 
-const Utils = require('./test/utils')
+const Utils = require('./test/utils.peer')
 
 let Server
 
