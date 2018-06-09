@@ -51,11 +51,15 @@ const rpcCommands = {
 
     cbs.push(wrap(cb, TIMEOUT))
   },
-  unregister: (input, cbs, ns, id) => {
+  unregister: (input, cbs, ns, id, cb) => {
     sendRequest(input, 'unregister', {
       ns,
       id
     })
+
+    if (typeof cb === 'function') { // simulate cb
+      setImmediate(() => cb())
+    }
   }
 }
 

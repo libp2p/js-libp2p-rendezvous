@@ -101,7 +101,7 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
       if (isNaN(cookie) || typeof cookie !== 'number') { // if cookie is invalid, set it to 0
         cookie = 0
       }
-      registrations = nsStore.toArray().filter(e => e.recieved_at > cookie).slice(0, limit)
+      registrations = nsStore.toArray().map(r => r[1]).filter(e => e.recieved_at > cookie).slice(0, limit)
       cookie = Buffer.from(String(registrations.length ? registrations[registrations.length - 1].recieved_at : cookie)) // if we got peers then use the last peers recieved_at at value, otherwise reuse current cookie
     } else {
       cookie = Buffer.from('0')

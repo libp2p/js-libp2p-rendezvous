@@ -6,6 +6,7 @@ const pull = require('pull-stream')
 
 const debug = require('debug')
 const log = debug('libp2p:rendezvous:client')
+const {parallel} = require('async')
 
 class Client {
   constructor (swarm) {
@@ -67,6 +68,64 @@ class Client {
     this._syncLock = true
     log('syncing')
     this.store = Sync.clearPoints(this.store)
+    let actions = [] // async rpc calls
+
+    // adds register / unregsiter actions to "actions" array
+    /*
+    pseudo-code:
+
+    for all store.points as point:
+      for all point.registrations as pReg:
+        if store.registrations does not contain pReg:
+          actions push "unregister pReg @ point"
+          delete point.registrations[pReg]
+      for all store.registrations as reg:
+        if point.registrations does not contain reg:
+          actions push "register reg @ point"
+          set point.registrations[reg]
+    */
+
+    let points = this.store.get('points')
+    let registrations = this.store.get('registrations')
+
+    this.store = this.store.set('points', points.reduce((points, point, id) => {
+      let regs = point.get('registrations')
+
+      regs = regs.reduce((regs, pReg, pRegId) => {
+        if (!registrations.get(pRegId)) {
+          log('sync: unregister@%s: %s', id, pRegId)
+          actions.push(cb => point.rpc().unregister(pRegId, pReg.peer.id.toBytes(), cb))
+          return regs.delete(pRegId)
+        }
+
+        return regs
+      }, regs)
+
+      regs = registrations.reduce((regs, reg, regId) => {
+        if (!regs.get(regId)) {
+          log('sync: register@%s: %s', id, regId)
+          actions.push(cb => point.rpc().register(regId, reg.peer, reg.ttl, cb))
+          return regs.set(regId, reg)
+        }
+
+        return regs
+      }, regs)
+
+      return point.set('registrations', regs)
+    }, points))
+
+    parallel(actions, (err) => {
+      delete this._syncLock
+
+      if (err) {
+        log(err) // ???
+      }
+
+      if (this._needResync) {
+        delete this._needResync
+        this.sync()
+      }
+    })
   }
 }
 
