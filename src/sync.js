@@ -48,7 +48,7 @@ const clearPoints = (store) => {
 }
 
 module.exports = {
-  createSyncState,
+  create: createSyncState,
   addPoint,
   getPoint,
   removePoint,
