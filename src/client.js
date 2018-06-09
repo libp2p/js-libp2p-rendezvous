@@ -17,9 +17,12 @@ class Client {
 
   dial (peer) {
     const id = peer.id.toB58String()
+
+    // check if we need to dial
     if (this._failedCache[id]) return log('not dialing %s because dial previously failed', id)
     if (this._dialLock[id]) return log('not dialing %s because dial is already in progress', id)
     if (Sync.getPoint(this.store, id)) return log('not dialing %s because peer is already connected', id)
+
     this._dialLock[id] = true // prevent race
     log('dialing %s', id)
 
@@ -35,6 +38,7 @@ class Client {
       log('dialing %s succeeded')
     }
 
+    // do the actual dialing
     this.swarm.dialProtocol(peer, '/p2p/rendezvous/1.0.0', (err, conn) => {
       if (err) return cb(err)
 
@@ -50,8 +54,19 @@ class Client {
         )
 
         this.store = Sync.addPoint(this.store, id, rpc.rpc)
+        cb()
       })
     })
+  }
+
+  sync () {
+    if (this._syncLock) {
+      this._needResync = true
+      return
+    }
+    this._syncLock = true
+    log('syncing')
+    this.store = Sync.clearPoints(this.store)
   }
 }
 
