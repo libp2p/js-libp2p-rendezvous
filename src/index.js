@@ -1,13 +1,35 @@
 'use strict'
 
+const debug = require('debug')
+const log = debug('libp2p:rendezvous')
+const EE = require('events').EventEmitter
+const Client = require('./client')
+
+class RendezvousDiscovery2 extends EE {
+  constructor (swarm, opt) {
+    super()
+    this._client = new Client(swarm, opt)
+  }
+  start () {
+    this.swarm.on('peer:connect', (peer) => this._client.dial(peer))
+  }
+  stop () {
+
+  }
+  // TODO: https://github.com/libp2p/specs/issues/47
+  register (ns) {
+
+  }
+  unregister (ns) {
+
+  }
+}
+
 const RPC = require('./rpc')
 const noop = () => {}
 const once = require('once')
-const debug = require('debug')
-const log = debug('libp2p:rendezvous')
 const State = require('./state')
 const {each} = require('async')
-
 
 // One interface that:
 //
