@@ -116,6 +116,13 @@ const clearExpiredFromNamespace = (store, peerTableName, currentTime) => {
   const peerTable = getNamespaces(store).get(peerTableName)
   // Go through all peers
   const newStore = peerTable.reduce((accStore, v) => {
+    // Check if ttl is function (clears peer after disconnect)
+    if (typeof v.get('ttl') === 'function') {
+      if (!v.get('ttl')()) {
+        return removePeer(accStore, v.get('id'))
+      }
+    }
+
     const expiresAt = new Date(v.get('received_at'))
 
     // Add TTL seconds to date to get when it should expire
@@ -138,6 +145,13 @@ const clearExpiredFromNamespace = (store, peerTableName, currentTime) => {
 const clearExpiredFromGlobalNamespace = (store, currentTime) => {
   // Go through all peers
   const newStore = store.get('global_namespace').reduce((accStore, v) => {
+    // Check if ttl is function (clears peer after disconnect)
+    if (typeof v.get('ttl') === 'function') {
+      if (!v.get('ttl')()) {
+        return removePeer(accStore, v.get('id'))
+      }
+    }
+
     const expiresAt = new Date(v.get('received_at'))
 
     // Add TTL seconds to date to get when it should expire
@@ -161,6 +175,14 @@ const clearExpired = (store, peerTableName, currentTime) => {
   return clearExpiredFromNamespace(newStore, peerTableName, currentTime)
 }
 
+const clearExpiredAll = (store, currentTime) => {
+  const newStore = clearExpiredFromGlobalNamespace(store, currentTime)
+  // return clearExpiredFromNamespace(newStore, peerTableName, currentTime)
+  return getNamespaces(newStore).reduce((store, _, peerTableName) => {
+    return clearExpiredFromNamespace(newStore, peerTableName, currentTime)
+  }, newStore)
+}
+
 const clearEmptyNamespaces = (store) => {
   return getNamespaces(store).reduce((store, ns, id) => {
     if (!ns.size) {
@@ -181,6 +203,7 @@ module.exports = {
   removeNamespace,
   clearEmptyNamespaces,
   clearExpired,
+  clearExpiredAll,
   utils: {
     getNamespaces,
     setNamespaces

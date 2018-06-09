@@ -35,10 +35,10 @@ const makeResponse = (type, data) => {
   return o
 }
 
-const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, store, msg) and returns [newStore, responseOrNull]
-  [MessageType.REGISTER]: (pi, id, Store, store, msg) => {
+const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, store, msg, peerIsOnline) and returns [newStore, responseOrNull]
+  [MessageType.REGISTER]: (pi, id, Store, store, msg, isOnline) => {
     let {ns, peer, ttl} = msg.register
-    log('register@%s: trying register on %s', id, ns)
+    log('register@%s: trying register on %s', id, ns || '<GLOBAL>')
     if (peer.id && new Id(peer.id).toB58String() !== id) { // check if this peer really owns address (TODO: get rid of that)
       log('register@%s: auth err (want %s)', id, new Id(peer.id).toB58String())
       return [store, makeResponse('request', makeStatus(ResponseStatus.E_NOT_AUTHORIZED))]
@@ -54,17 +54,23 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
     pi = new Peer(new Id(peer.id))
     peer.addrs.forEach(a => pi.multiaddrs.add(a))
 
+    if (!ttl) {
+      ttl = isOnline
+    }
+
     let record = {
-      peer,
+      peer: pi,
       ttl,
       received_at: Date.now()
     }
 
     if (ns) {
-      store = Store.addPeerToNamespace(store, Store.createNamespace(store, ns), record) // TODO: should this add to global ns too?
+      store = Store.addPeerToNamespace(Store.createNamespace(store, ns), ns, record) // TODO: should this add to global ns too?
     } else {
       store = Store.addPeer(store, record)
     }
+
+    log('register@%s: registered on %s', id, ns || '<GLOBAL>')
 
     return [store, makeResponse('register', makeStatus(ResponseStatus.OK))]
   },
@@ -80,10 +86,10 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
 
     return [store]
   },
-  [MessageType.DISCOVER]: (pi, id, Store, store, msg) => { // TODO: figure out what to use as cookie
+  [MessageType.DISCOVER]: (pi, id, Store, store, msg) => {
     let {ns, limit, cookie} = msg.discover
     if (limit <= 0 || limit > MAX_DISCOVER_LIMIT) limit = MAX_DISCOVER_LIMIT
-    log('discover@%s: discover on %s (%s peers)', id, ns, limit)
+    log('discover@%s: discover on %s (%s peers)', id, ns || '<GLOBAL>', limit)
 
     let nsStore
     let registrations = []
@@ -98,11 +104,16 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
       if (cookie && cookie.length) { // if client gave us a cookie, try to parse it
         cookie = parseInt(String(cookie), 10)
       }
-      if (isNaN(cookie) || typeof cookie !== 'number') { // if cookie is invalid, set it to 0
+      if (Number.isNaN(cookie) || typeof cookie !== 'number') { // if cookie is invalid, set it to 0
         cookie = 0
       }
-      registrations = nsStore.toArray().map(r => r[1]).filter(e => e.recieved_at > cookie).slice(0, limit)
-      cookie = Buffer.from(String(registrations.length ? registrations[registrations.length - 1].recieved_at : cookie)) // if we got peers then use the last peers recieved_at at value, otherwise reuse current cookie
+      registrations = nsStore.toArray()
+        .map(r => r[1]) // get only value without key
+        .filter(e => e.received_at > cookie) // filter out previous peers
+        .slice(0, limit + 1)
+        .filter(e => e.peer.id.toB58String() !== id) // filter out own peer-id
+        .slice(0, limit)
+      cookie = Buffer.from(String(registrations.length ? registrations[registrations.length - 1].received_at : cookie)) // if we got peers then use the last peer's received_at value, otherwise reuse current cookie
     } else {
       cookie = Buffer.from('0')
     }
@@ -129,15 +140,19 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
 const RPC = (pi, main) => {
   let id = pi.id.toB58String()
 
+  let online = true
+
   return pull(
     ppb.decode(Message),
     through(function (data) {
       let handler = handlers[data.type]
       if (!handler) return log('ignore@%s: invalid/unknown type %s', id, data.type) // ignore msg
-      let [store, resp] = handler(pi, id, main.Store, main.store, data)
+      let [store, resp] = handler(pi, id, main.Store, main.store, data, () => online)
       if (resp) this.queue(resp)
       main.store = store // update store
+      main.gc()
     }, end => {
+      online = false
       log('end@%s: %s', id, end)
     }),
     ppb.encode(Message)

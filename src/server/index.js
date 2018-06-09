@@ -40,7 +40,7 @@ class Server {
   }
 
   gc () {
-    this.store = this.Store.clearEmptyNamespaces(this.Store.clearExpired(this.store))
+    this.store = this.Store.clearEmptyNamespaces(this.Store.clearExpiredAll(this.store, Date.now()))
   }
 }
 
