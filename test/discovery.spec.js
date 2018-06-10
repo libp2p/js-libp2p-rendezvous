@@ -16,6 +16,7 @@ chai.use(dirtyChai)
 describe('discovery', () => {
   let client1
   let client2
+
   before(async () => {
     client1 = await Utils.createRendezvousPeer(require('./client1.id.json'))
     client2 = await Utils.createRendezvousPeer(require('./client2.id.json'))

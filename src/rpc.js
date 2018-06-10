@@ -127,12 +127,14 @@ const RPC = () => {
     ),
     sink: pull(
       ppb.decode(Message),
-      pull.map(data => {
+      pull.drain(data => {
         let cb = cbs.shift()
         if (!cb) return log('ignore rpc, no cb')
         let handler = handlers[data.type]
         if (handler) {
           cb(...handler(data))
+        } else {
+          log('no response handler for %s', data.type)
         }
       }, () => (online = false))
     ),

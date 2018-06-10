@@ -14,6 +14,7 @@ const MAX_NS_LENGTH = 255 // TODO: spec this
 const MAX_DISCOVER_LIMIT = 1000 // TODO: spec this
 
 const registerErrors = {
+  0: 'OK',
   100: 'Invalid namespace provided',
   101: 'Invalid peer-info provided',
   102: 'Invalid TTL provided',
@@ -30,7 +31,7 @@ const makeStatus = (status) => {
 }
 
 const makeResponse = (type, data) => {
-  let o = { type: MessageType[type.toUpperCase()] }
+  let o = { type: MessageType[type.toUpperCase() + '_RESPONSE'] }
   o[type.toLowerCase() + 'Response'] = data
   return o
 }

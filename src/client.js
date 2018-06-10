@@ -114,7 +114,9 @@ class Client {
       return point.set('registrations', regs)
     }, points))
 
+    log('do sync')
     parallel(actions, (err) => {
+      log('done sync')
       delete this._syncLock
 
       if (err) {

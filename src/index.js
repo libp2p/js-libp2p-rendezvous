@@ -31,7 +31,6 @@ class RendezvousDiscovery extends EE {
 
 const RPC = require('./rpc')
 const once = require('once')
-const State = require('./state')
 const {each} = require('async')
 
 // One interface that:
