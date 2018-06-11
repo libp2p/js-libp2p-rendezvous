@@ -113,8 +113,21 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
         .filter(e => e.received_at > cookie) // filter out previous peers
         .slice(0, limit + 1)
         .filter(e => e.peer.id.toB58String() !== id) // filter out own peer-id
-        .slice(0, limit)
-      cookie = Buffer.from(String(registrations.length ? registrations[registrations.length - 1].received_at : cookie)) // if we got peers then use the last peer's received_at value, otherwise reuse current cookie
+
+      let next = registrations[limit]
+      registrations = registrations.slice(0, limit)
+      let last = registrations[registrations.length - 1]
+
+      if (next) {
+        if (next.recieved_at === last.received_at) {
+          cookie = last.received_at
+        } else {
+          cookie = last.received_at + 1
+        }
+      } else if (last) {
+        cookie = last.received_at
+      }
+      cookie = Buffer.from(String(cookie))
     } else {
       cookie = Buffer.from('0')
     }
