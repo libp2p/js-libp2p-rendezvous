@@ -110,7 +110,7 @@ const handlers = { // a handler takes (peerInfo, peerIdAsB58String, StoreClass, 
       }
       registrations = nsStore.toArray()
         .map(r => r[1].toJS()) // get only value without key
-        .filter(e => e.received_at > cookie) // filter out previous peers
+        .filter(e => e.received_at >= cookie) // filter out previous peers
         .slice(0, limit + 1)
         .filter(e => e.peer.id.toB58String() !== id) // filter out own peer-id
 
