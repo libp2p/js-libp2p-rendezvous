@@ -184,7 +184,7 @@ class Client {
 
     map(ids,
       (peerID, cb) => this._discover(peerID, ns, 0, (err, res) => err ? cb(null, []) : cb(null, res)),
-      (err, res) => err ? cb(err) : cb(null, res.reduce((a, b) => a.concat(b))))
+      (err, res) => err ? cb(err) : cb(null, res.reduce((a, b) => a.concat(b), [])))
   }
 
   unregister (ns, id) {

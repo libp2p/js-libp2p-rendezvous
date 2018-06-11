@@ -2,7 +2,7 @@
   "name": "libp2p-rendezvous",
   "version": "0.0.0",
   "description": "A javascript implementation of the rendezvous protocol for libp2p",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
     "test": "aegir test",
     "test:node": "aegir test -t node",
