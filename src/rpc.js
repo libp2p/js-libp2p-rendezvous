@@ -73,6 +73,7 @@ const handlers = {
     return res
   },
   [MessageType.DISCOVER_RESPONSE]: (msg) => {
+    console.log(msg)
     let res = []
     const {cookie, status, statusText, registrations} = msg.discoverResponse
 

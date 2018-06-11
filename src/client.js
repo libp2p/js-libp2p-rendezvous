@@ -158,20 +158,19 @@ class Client {
       ns = null
     }
 
-    log('discover@%s: %s limit=%s', peerID, ns, limit)
+    log('discover@%s: %s limit=%s', peerID, ns || '<GLOBAL>', limit)
 
-    let point = Sync.getPoint(this.store, peerID)
-    console.log(point)
-    if (!point || !point.get('rpc').online()) {
+    let point = this.store.get('points').get(peerID)
+    if (!point || !point.get('rpc')().online()) {
       return cb(new Error('Point not connected!'))
     }
 
-    point.get('rpc').discover(ns, limit, point.get('cookies').get(ns) || Buffer.from(''), (err, res) => {
+    point.get('rpc')().discover(ns, limit, point.get('cookies').get(ns) || Buffer.from(''), (err, res) => {
       if (err) return cb(err)
       this.store.set('points',
         this.store.get('points').set(peerID,
-          Sync.getPoint(this.store, peerID).set('cookies',
-            Sync.getPoint(this.store, peerID).get('cookies').set(ns, res.cookie))))
+          this.store.get('points').get(peerID).set('cookies',
+            this.store.get('points').get(peerID).get('cookies').set(ns, res.cookie))))
       return cb(null, res.peers)
     })
   }
