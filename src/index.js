@@ -19,6 +19,7 @@ class RendezvousDiscovery extends EE {
     log('start')
     this._loop = setInterval(this._discoverLoop.bind(this), 10 * 1000)
     this.swarm.on('peer:connect', (peer) => this._client.dial(peer))
+    this.swarm.on('peer:disconnect', () => this._client.sync())
     if (cb) {
       cb()
     }
