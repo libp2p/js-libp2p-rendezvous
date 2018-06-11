@@ -54,7 +54,8 @@ describe('discovery', () => {
   })
   it('can\'t discover client2@hello from client2', async () => {
     const res = await discover(client2, 'hello')
-    expect(res).to.have.lengthOf(0)
+    expect(res).to.have.lengthOf(1)
+    expect(res[0].id.toB58String()).to.equal(client1.swarm.peerInfo.id.toB58String()) // check if id is NOT from client2
   })
   it('can\'t discover client2@<GLOBAL> from client2', async () => {
     const res = await discover(client2)

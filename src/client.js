@@ -182,7 +182,6 @@ class Client {
 
     let ids = this.store.get('points').toArray().map(p => p[0])
 
-    log('d %s %s', ns, ids)
     map(ids,
       (peerID, cb) => this._discover(peerID, ns, 0, (err, res) => err ? cb(null, []) : cb(null, res)),
       (err, res) => err ? cb(err) : cb(null, res.reduce((a, b) => a.concat(b))))

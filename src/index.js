@@ -22,10 +22,10 @@ class RendezvousDiscovery extends EE {
   }
   // TODO: https://github.com/libp2p/specs/issues/47
   register (ns) {
-    this._client.register(ns, noop)
+    this._client.register(ns || null, noop)
   }
   unregister (ns) {
-    this._client.unregister(ns, noop)
+    this._client.unregister(ns || null, noop)
   }
 }
 
