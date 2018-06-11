@@ -6,7 +6,7 @@ const pull = require('pull-stream')
 
 const debug = require('debug')
 const log = debug('libp2p:rendezvous:client')
-const {parallel} = require('async')
+const {parallel, map} = require('async')
 
 class Client {
   constructor (swarm) {
@@ -18,6 +18,7 @@ class Client {
 
   dial (peer) {
     const id = peer.id.toB58String()
+    this.sync()
 
     // check if we need to dial
     if (this._failedCache[id]) return log('not dialing %s because dial previously failed', id)
@@ -37,6 +38,7 @@ class Client {
       }
 
       log('dialing %s succeeded', id)
+      this.sync()
     }
 
     // do the actual dialing
@@ -111,7 +113,7 @@ class Client {
         return regs
       }, regs)
 
-      return point.set('registrations', regs)
+      return points.set(id, point.set('registrations', regs))
     }, points))
 
     log('do sync')
@@ -145,7 +147,7 @@ class Client {
     this.sync()
   }
 
-  discover (ns, limit, cb) {
+  _discover (peerID, ns, limit, cb) {
     if (typeof limit === 'function') {
       cb = limit
       limit = 0
@@ -156,7 +158,35 @@ class Client {
       ns = null
     }
 
-    // TODO: add
+    log('discover@%s: %s limit=%s', peerID, ns, limit)
+
+    let point = Sync.getPoint(this.store, peerID)
+    console.log(point)
+    if (!point || !point.get('rpc').online()) {
+      return cb(new Error('Point not connected!'))
+    }
+
+    point.get('rpc').discover(ns, limit, point.get('cookies').get(ns) || Buffer.from(''), (err, res) => {
+      if (err) return cb(err)
+      this.store.set('points',
+        this.store.get('points').set(peerID,
+          Sync.getPoint(this.store, peerID).set('cookies',
+            Sync.getPoint(this.store, peerID).get('cookies').set(ns, res.cookie))))
+      return cb(null, res.peers)
+    })
+  }
+
+  discover (ns, cb) {
+    if (typeof ns === 'function') {
+      cb = ns
+    }
+
+    let ids = this.store.get('points').toArray().map(p => p[0])
+
+    log('d %s %s', ns, ids)
+    map(ids,
+      (peerID, cb) => this._discover(peerID, ns, 0, (err, res) => err ? cb(null, []) : cb(null, res)),
+      (err, res) => err ? cb(err) : cb(null, res.reduce((a, b) => a.concat(b))))
   }
 
   unregister (ns, id) {

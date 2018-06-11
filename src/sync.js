@@ -19,9 +19,9 @@ const incrementRevision = (store) => {
 const addPoint = (store, id, rpc) => {
   if (getPoint(store, id)) throw new Error('Trying to override ' + id)
   store = incrementRevision(store)
-  console.log('set', store, id, rpc)
   return store.set('points', store.get('points').set(id, Map({
     registrations: Map(),
+    cookies: Map(),
     rpc
   })))
 }
@@ -40,7 +40,6 @@ const removePoint = (store, id) => {
 // Clears offline points
 const clearPoints = (store) => {
   return store.get('points').reduce((store, point, id) => {
-    console.log(store, point, point.get('rpc'), id)
     if (!point.get('rpc')().online()) {
       return removePoint(store, id)
     }

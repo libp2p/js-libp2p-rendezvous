@@ -66,20 +66,22 @@ const rpcCommands = {
 const handlers = {
   [MessageType.REGISTER_RESPONSE]: (msg) => {
     let res = []
-    if (msg.registerResponse.status) {
-      res.push(new Error('Server returned error: ' + (msg.registerResponse.statusText || '(unknown error)')))
+    const {status, statusText} = msg.registerResponse
+    if (status) {
+      res.push(new Error('Server returned error: ' + (statusText || '(unknown error)')))
     }
     return res
   },
   [MessageType.DISCOVER_RESPONSE]: (msg) => {
     let res = []
+    const {cookie, status, statusText, registrations} = msg.discoverResponse
 
-    if (msg.discoverResponse.status) {
-      res.push(new Error('Server returned error: ' + (msg.registerResponse.statusText || '(unknown error)')))
+    if (status) {
+      res.push(new Error('Server returned error: ' + (statusText || '(unknown error)')))
     } else {
       res.push(null)
 
-      let peers = msg.discoverResponse.registrations.map(p => {
+      let peers = registrations.map(p => {
         try {
           const pi = new Peer(new Id(p.peer.id))
           p.peer.addrs.forEach(a => pi.multiaddrs.add(a))
@@ -90,7 +92,7 @@ const handlers = {
       }).filter(Boolean)
 
       res.push({
-        cookie: msg.discoverResponse.cookie,
+        cookie,
         peers
       })
     }
