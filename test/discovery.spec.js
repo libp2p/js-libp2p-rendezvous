@@ -43,6 +43,11 @@ describe('discovery', () => {
     expect(res).to.have.lengthOf(0)
   })
 
+  it('dial client2->client1', async () => {
+    const res = await discover(client2, 'hello')
+    await promisify(client2.swarm.dial.bind(client2.swarm, res[0]))()
+  })
+
   it('register client2@<GLOBAL>', async () => {
     client2.register()
     await wait()

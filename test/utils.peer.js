@@ -15,7 +15,7 @@ const Rendezvous = require('../src')
 const Server = require('../src/server')
 
 const Utils = module.exports = {
-  createSwarm: (id, addrs, post) => new Promise((resolve, reject) => {
+  createSwarm: (id, addrs, lp2pOpt, post) => new Promise((resolve, reject) => {
     Id.createFromJSON(id, (err, peerID) => {
       if (err) return reject(err)
       const peer = new Peer(peerID)
@@ -31,7 +31,7 @@ const Utils = module.exports = {
           ],
           crypto: [SECIO]
         }
-      }, peer, null, {})
+      }, peer, null, lp2pOpt || {})
       if (post) {
         post(swarm)
       }
@@ -42,14 +42,26 @@ const Utils = module.exports = {
     })
   }),
   createServer: async (id, conf, addrs) => {
-    const swarm = await Utils.createSwarm(id, addrs || defaultServerAddrs)
+    const swarm = await Utils.createSwarm(id, addrs || defaultServerAddrs, {
+      relay: {
+        enabled: true,
+        hop: {
+          enabled: true,
+          active: true
+        }
+      }
+    })
     const server = new Server(Object.assign(Object.assign({}, conf || {}), {swarm}))
     server.start()
     return server
   },
   createRendezvousPeer: async (id, conf, addrs) => {
     let rendezvous
-    const swarm = await Utils.createSwarm(id, addrs || defaultAddrs, (swarm) => {
+    const swarm = await Utils.createSwarm(id, addrs || defaultAddrs, {
+      relay: {
+        enabled: true
+      }
+    }, (swarm) => {
       rendezvous = new Rendezvous(swarm, conf || {})
     })
     rendezvous.start()
