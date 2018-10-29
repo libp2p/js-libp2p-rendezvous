@@ -2,6 +2,7 @@
   "name": "libp2p-rendezvous",
   "version": "0.0.0",
   "description": "A javascript implementation of the rendezvous protocol for libp2p",
+  "leadMaintainer": "Vasco Santos <vasco.santos@moxy.studio>",
   "main": "index.js",
   "scripts": {
     "test": "aegir test"
