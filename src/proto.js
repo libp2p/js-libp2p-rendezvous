@@ -3,6 +3,7 @@
 const protons = require('protons')
 
 module.exports = protons(`
+message Message {
   enum MessageType {
     REGISTER = 0;
     REGISTER_RESPONSE = 1;
@@ -19,6 +20,7 @@ module.exports = protons(`
     E_INVALID_COOKIE    = 103;
     E_NOT_AUTHORIZED    = 200;
     E_INTERNAL_ERROR    = 300;
+    E_UNAVAILABLE       = 400;
   }
 
   message PeerInfo {
@@ -35,6 +37,7 @@ module.exports = protons(`
   message RegisterResponse {
     optional ResponseStatus status = 1;
     optional string statusText = 2;
+    optional int64 ttl = 3; // in seconds
   }
 
   message Unregister {
@@ -55,7 +58,6 @@ module.exports = protons(`
     optional string statusText = 4;
   }
 
-message Message {
   optional MessageType type = 1;
   optional Register register = 2;
   optional RegisterResponse registerResponse = 3;
