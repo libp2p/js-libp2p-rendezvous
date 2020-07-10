@@ -35,7 +35,9 @@ describe('client mode', () => {
     rendezvous = new Rendezvous({
       libp2p: peer,
       options: {
-        isRendezvousPoint: false
+        server: {
+          enabled: false
+        }
       }
     })
 

@@ -14,11 +14,16 @@ const MulticodecTopology = require('libp2p-interfaces/src/topology/multicodec-to
 const multiaddr = require('multiaddr')
 const PeerId = require('peer-id')
 
+const Discovery = require('./discovery')
 const Server = require('./server')
 const { codes: errCodes } = require('./errors')
 const { PROTOCOL_MULTICODEC } = require('./constants')
 const { Message } = require('./proto')
 const MESSAGE_TYPE = Message.MessageType
+
+const defaultServerOptions = {
+  enabled: true
+}
 
 /**
  * Libp2p Rendezvous.
@@ -30,19 +35,31 @@ class Rendezvous {
    * @param {object} params
    * @param {Libp2p} params.libp2p
    * @param {object} params.options
-   * @param {boolean} [params.options.isServer = true]
+   * @param {Array<string>} [params.namespaces = []]
+   * @param {object} [params.discovery]
+   * @param {number} [params.discovery.interval = 5000]
+   * @param {object} [params.server]
+   * @param {boolean} [params.server.enabled = true]
    */
-  constructor ({ libp2p, options = { isServer: true } }) {
+  constructor ({ libp2p, options = {} }) {
     this._libp2p = libp2p
     this._peerId = libp2p.peerId
     this._registrar = libp2p.registrar
-    this._options = options
-    this._server = undefined
+
+    this._namespaces = options.namespaces || []
+    this.discovery = new Discovery(this, options.discovery)
+
+    this._serverOptions = {
+      ...defaultServerOptions,
+      ...options.server || {}
+    }
 
     /**
      * @type {Map<string, Connection>}
      */
     this._rendezvousConns = new Map()
+
+    this._server = undefined
 
     this._registrarId = undefined
     this._onPeerConnected = this._onPeerConnected.bind(this)
@@ -61,7 +78,7 @@ class Rendezvous {
     log('starting')
 
     // Create Rendezvous point if enabled
-    if (this._options.isServer) {
+    if (this._serverOptions.enabled) {
       this._server = new Server({ registrar: this._registrar })
     }
 
@@ -76,6 +93,8 @@ class Rendezvous {
     this._registrarId = await this._registrar.register(topology)
 
     log('started')
+
+    this._keepRegistrations()
   }
 
   /**
@@ -89,11 +108,31 @@ class Rendezvous {
 
     log('stopping')
 
+    clearInterval(this._interval)
     // unregister protocol and handlers
     await this._registrar.unregister(this._registrarId)
 
     this._registrarId = undefined
     log('stopped')
+  }
+
+  _keepRegistrations () {
+    const register = () => {
+      if (!this._rendezvousConns.size) {
+        return
+      }
+
+      const promises = []
+
+      this._namespaces.forEach((ns) => {
+        promises.push(this.register(ns))
+      })
+
+      return Promise.all(promises)
+    }
+
+    register()
+    this._interval = setInterval(register, 1000)
   }
 
   /**
@@ -317,4 +356,5 @@ class Rendezvous {
   }
 }
 
+Rendezvous.tag = 'rendezvous'
 module.exports = Rendezvous

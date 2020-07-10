@@ -7,7 +7,6 @@ The rendezvous protocol can be used in different contexts across libp2p. For usi
 `js-libp2p` supports the usage of the rendezvous protocol through its configuration. It allows to enable the rendezvous protocol, as well as its server mode, enable automatic peer discover and to specify the topics to register from startup.
 
 The rendezvous comes with a discovery service that enables libp2p to automatically discover other peers in the provided namespaces and eventually connect to them.
-**TODO: it should be compliant with the peer-discovery interface and configured as any other discovery service instead!!**
 
 You can configure it through libp2p as follows:
 

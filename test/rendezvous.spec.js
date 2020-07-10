@@ -6,16 +6,11 @@ chai.use(require('dirty-chai'))
 chai.use(require('chai-as-promised'))
 const { expect } = chai
 const sinon = require('sinon')
-const pWaitFor = require('p-wait-for')
-
-const multiaddr = require('multiaddr')
 
 const Rendezvous = require('../src')
 const { codes: errCodes } = require('../src/errors')
 
-const { createPeer } = require('./utils')
-const { MULTIADDRS_WEBSOCKETS } = require('./fixtures/browser')
-const relayAddr = MULTIADDRS_WEBSOCKETS[0]
+const { createPeer, connectPeers } = require('./utils')
 
 const namespace = 'ns'
 
@@ -29,8 +24,8 @@ describe('rendezvous', () => {
     })
 
     afterEach(async () => {
-      await peer.stop()
       await rendezvous.stop()
+      await peer.stop()
     })
 
     it('can be started and stopped', async () => {
@@ -67,19 +62,6 @@ describe('rendezvous', () => {
   describe('api', () => {
     let peers
 
-    const connectPeers = async (peer, otherPeer) => {
-      // Connect to testing relay node
-      await peer.dial(relayAddr)
-      await otherPeer.dial(relayAddr)
-
-      // Connect each other via relay node
-      const m = multiaddr(`${relayAddr}/p2p-circuit/p2p/${otherPeer.peerId.toB58String()}`)
-      await peer.dial(m)
-
-      // Wait event propagation
-      await pWaitFor(() => peer.rendezvous._rendezvousConns.size === 1)
-    }
-
     beforeEach(async () => {
       peers = await createPeer({ number: 3 })
 
@@ -89,7 +71,9 @@ describe('rendezvous', () => {
         const rendezvous = new Rendezvous({
           libp2p: peer,
           options: {
-            isServer: index !== 0
+            server: {
+              enabled: index !== 0
+            }
           }
         })
         rendezvous.start()

@@ -6,6 +6,7 @@ const { NOISE: Crypto } = require('libp2p-noise')
 const PeerId = require('peer-id')
 
 const pTimes = require('p-times')
+const pWaitFor = require('p-wait-for')
 
 const Libp2p = require('libp2p')
 const multiaddr = require('multiaddr')
@@ -49,3 +50,18 @@ async function createPeer ({ number = 1, started = true, config = {} } = {}) {
 }
 
 module.exports.createPeer = createPeer
+
+async function connectPeers (peer, otherPeer) {
+  // Connect to testing relay node
+  await peer.dial(relayAddr)
+  await otherPeer.dial(relayAddr)
+
+  // Connect each other via relay node
+  const m = multiaddr(`${relayAddr}/p2p-circuit/p2p/${otherPeer.peerId.toB58String()}`)
+  await peer.dial(m)
+
+  // Wait event propagation
+  await pWaitFor(() => peer.rendezvous._rendezvousConns.size === 1)
+}
+
+module.exports.connectPeers = connectPeers
