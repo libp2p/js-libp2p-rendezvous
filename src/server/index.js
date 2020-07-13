@@ -10,6 +10,7 @@ const rpc = require('./rpc')
 /**
 * Rendezvous registration.
 * @typedef {Object} Registration
+* @property {string} id
 * @property {PeerId} peerId
 * @property {Array<Buffer>} addrs
 * @property {number} expiration
@@ -33,7 +34,15 @@ class RendezvousServer {
      * Registrations per namespace.
      * @type {Map<string, Map<string, Registration>>}
      */
-    this.registrations = new Map()
+    this.nsRegistrations = new Map()
+
+    /**
+     * Registration ids per cookie.
+     * @type {Map<string, Set<string>>}
+     */
+    this.cookieRegistrations = new Map()
+
+    this._gc = this._gc.bind(this)
   }
 
   /**
@@ -62,7 +71,9 @@ class RendezvousServer {
   stop () {
     clearInterval(this._interval)
     this._interval = undefined
-    this.registrations.clear()
+
+    this.nsRegistrations.clear()
+    this.cookieRegistrations.clear()
 
     log('stopped')
   }
@@ -73,16 +84,30 @@ class RendezvousServer {
    */
   _gc () {
     const now = Date.now()
+    const removedIds = []
 
     // Iterate namespaces
-    this.registrations.forEach((nsRegistrations) => {
+    this.nsRegistrations.forEach((nsEntry) => {
       // Iterate registrations for namespaces
-      nsRegistrations.forEach((reg, idStr) => {
+      nsEntry.forEach((reg, idStr) => {
         if (now >= reg.expiration) {
-          nsRegistrations.delete(idStr)
+          nsEntry.delete(idStr)
+          removedIds.push(reg.id)
         }
       })
     })
+
+    // Remove outdated records references from cookies
+    for (const [key, idSet] of this.cookieRegistrations.entries()) {
+      const filteredIds = Array.from(idSet).filter((id) => !removedIds.includes(id))
+
+      if (filteredIds && filteredIds.length) {
+        this.cookieRegistrations.set(key, filteredIds)
+      } else {
+        // Empty
+        this.cookieRegistrations.delete(key)
+      }
+    }
   }
 
   /**
@@ -94,15 +119,16 @@ class RendezvousServer {
    * @returns {void}
    */
   addRegistration (ns, peerId, addrs, ttl) {
-    const nsRegistrations = this.registrations.get(ns) || new Map()
+    const nsEntry = this.nsRegistrations.get(ns) || new Map()
 
-    nsRegistrations.set(peerId.toB58String(), {
+    nsEntry.set(peerId.toB58String(), {
+      id: String(Math.random() + Date.now()),
       peerId,
       addrs,
       expiration: Date.now() + ttl
     })
 
-    this.registrations.set(ns, nsRegistrations)
+    this.nsRegistrations.set(ns, nsEntry)
   }
 
   /**
@@ -112,14 +138,14 @@ class RendezvousServer {
    * @returns {void}
    */
   removeRegistration (ns, peerId) {
-    const nsRegistrations = this.registrations.get(ns)
+    const nsEntry = this.nsRegistrations.get(ns)
 
-    if (nsRegistrations) {
-      nsRegistrations.delete(peerId.toB58String())
+    if (nsEntry) {
+      nsEntry.delete(peerId.toB58String())
 
       // Remove registrations map to namespace if empty
-      if (!nsRegistrations.size) {
-        this.registrations.delete(ns)
+      if (!nsEntry.size) {
+        this.nsRegistrations.delete(ns)
       }
       log('removed existing registrations for the namespace - peer pair:', ns, peerId.toB58String())
     }
@@ -131,12 +157,12 @@ class RendezvousServer {
    * @returns {void}
    */
   removePeerRegistrations (peerId) {
-    for (const [ns, reg] of this.registrations.entries()) {
+    for (const [ns, reg] of this.nsRegistrations.entries()) {
       reg.delete(peerId.toB58String())
 
       // Remove registrations map to namespace if empty
       if (!reg.size) {
-        this.registrations.delete(ns)
+        this.nsRegistrations.delete(ns)
       }
     }
 
@@ -146,35 +172,45 @@ class RendezvousServer {
   /**
    * Get registrations for a namespace
    * @param {string} ns
-   * @param {number} limit
-   * @returns {Array<Registration>}
+   * @param {object} [options]
+   * @param {number} [options.limit]
+   * @param {string} [options.cookie]
+   * @returns {{ registrations: Array<Registration>, cookie: string }}
    */
-  getRegistrations (ns, limit = MAX_LIMIT) {
-    const nsRegistrations = this.registrations.get(ns) || new Map()
+  getRegistrations (ns, { limit = MAX_LIMIT, cookie = String(Math.random() + Date.now()) } = {}) {
+    const nsEntry = this.nsRegistrations.get(ns) || new Map()
     const registrations = []
+    const cRegistrations = this.cookieRegistrations.get(cookie) || new Set()
 
-    for (const [idStr, reg] of nsRegistrations.entries()) {
+    for (const [idStr, reg] of nsEntry.entries()) {
       if (reg.expiration <= Date.now()) {
-        // Clean outdated registration
-        nsRegistrations.delete(idStr)
+        // Clean outdated registration from registrations and cookie record
+        nsEntry.delete(idStr)
+        cRegistrations.delete(reg.id)
         continue
       }
 
-      registrations.push({
-        ns,
-        peer: {
-          id: reg.peerId.toBytes(),
-          addrs: reg.addrs
-        },
-        ttl: reg.expiration - Date.now()
-      })
+      // If this record was already sent, continue
+      if (cRegistrations.has(reg.id)) {
+        continue
+      }
+
+      cRegistrations.add(reg.id)
+      registrations.push(reg)
 
       // Stop if reached limit
       if (registrations.length === limit) {
         break
       }
     }
-    return registrations
+
+    // Save cookie registrations
+    this.cookieRegistrations.set(cookie, cRegistrations)
+
+    return {
+      registrations,
+      cookie
+    }
   }
 }
 

@@ -44,9 +44,9 @@ describe('rendezvous discovery', () => {
     await connectPeers(peers[1], peers[0])
     await connectPeers(peers[2], peers[0])
 
-    expect(peers[0].rendezvous._rendezvousConns.size).to.eql(0)
-    expect(peers[1].rendezvous._rendezvousConns.size).to.eql(1)
-    expect(peers[2].rendezvous._rendezvousConns.size).to.eql(1)
+    expect(peers[0].rendezvous._rendezvousPoints.size).to.eql(0)
+    expect(peers[1].rendezvous._rendezvousPoints.size).to.eql(1)
+    expect(peers[2].rendezvous._rendezvousPoints.size).to.eql(1)
   })
 
   afterEach(async () => {
@@ -71,9 +71,9 @@ describe('rendezvous discovery', () => {
     peers[1].rendezvous.discovery.start()
 
     // Register
-    expect(peers[0].rendezvous._server.registrations.size).to.eql(0)
+    expect(peers[0].rendezvous._server.nsRegistrations.size).to.eql(0)
     await peers[2].rendezvous.register(namespace)
-    expect(peers[0].rendezvous._server.registrations.size).to.eql(1)
+    expect(peers[0].rendezvous._server.nsRegistrations.size).to.eql(1)
 
     await defer.promise
   })
@@ -90,9 +90,9 @@ describe('rendezvous discovery', () => {
     peers[1].rendezvous.discovery.start()
 
     // Register
-    expect(peers[0].rendezvous._server.registrations.size).to.eql(0)
+    expect(peers[0].rendezvous._server.nsRegistrations.size).to.eql(0)
     await peers[2].rendezvous.register(namespace2)
-    expect(peers[0].rendezvous._server.registrations.size).to.eql(1)
+    expect(peers[0].rendezvous._server.nsRegistrations.size).to.eql(1)
 
     await delay(1500)
   })

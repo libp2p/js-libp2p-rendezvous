@@ -40,13 +40,24 @@ module.exports = (rendezvousPoint) => {
       }
 
       // Get registrations
-      const registrations = rendezvousPoint.getRegistrations(msg.discover.ns, msg.discover.limit)
+      const options = {
+        cookie: msg.discover.cookie ? msg.discover.cookie.toString() : undefined,
+        limit: msg.discover.limit
+      }
+      const { registrations, cookie } = rendezvousPoint.getRegistrations(msg.discover.ns, options)
 
       return {
         type: MESSAGE_TYPE.DISCOVER_RESPONSE,
         discoverResponse: {
-          cookie: undefined, // TODO
-          registrations,
+          cookie: Buffer.from(cookie),
+          registrations: registrations.map((r) => ({
+            ns: msg.discover.ns,
+            peer: {
+              id: r.peerId.toBytes(),
+              addrs: r.addrs
+            },
+            ttl: r.expiration - Date.now()
+          })),
           status: RESPONSE_STATUS.OK
         }
       }

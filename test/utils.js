@@ -75,7 +75,7 @@ async function connectPeers (peer, otherPeer) {
   await peer.dial(m)
 
   // Wait event propagation
-  await pWaitFor(() => peer.rendezvous._rendezvousConns.size === 1)
+  await pWaitFor(() => peer.rendezvous._rendezvousPoints.size === 1)
 }
 
 module.exports.connectPeers = connectPeers

@@ -26,7 +26,7 @@ describe('flows', () => {
       await peer.dial(m)
 
       // Wait event propagation
-      await pWaitFor(() => peer.rendezvous._rendezvousConns.size === 1)
+      await pWaitFor(() => peer.rendezvous._rendezvousPoints.size === 1)
     }
 
     beforeEach(async () => {
@@ -52,10 +52,6 @@ describe('flows', () => {
       await libp2p.rendezvous.stop()
       await libp2p.stop()
     }))
-
-    it.skip('should not discover replicated peers?', () => {
-      // TODO
-    })
 
     it('discover find registered peer for namespace only when registered', async () => {
       await connectPeers(peers[0], peers[1])

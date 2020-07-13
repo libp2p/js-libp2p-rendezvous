@@ -40,8 +40,8 @@ describe('connectivity', () => {
   }))
 
   it('updates known rendezvous points', async () => {
-    expect(peers[0].rendezvous._rendezvousConns.size).to.equal(0)
-    expect(peers[1].rendezvous._rendezvousConns.size).to.equal(0)
+    expect(peers[0].rendezvous._rendezvousPoints.size).to.equal(0)
+    expect(peers[1].rendezvous._rendezvousPoints.size).to.equal(0)
 
     // Connect each other via relay node
     const m = multiaddr(`${relayAddr}/p2p-circuit/p2p/${peers[1].peerId.toB58String()}`)
@@ -53,15 +53,15 @@ describe('connectivity', () => {
     // Wait event propagation
     // Relay peer is not with rendezvous enabled
     await pWaitFor(() =>
-      peers[0].rendezvous._rendezvousConns.size === 1 &&
-      peers[1].rendezvous._rendezvousConns.size === 1)
+      peers[0].rendezvous._rendezvousPoints.size === 1 &&
+      peers[1].rendezvous._rendezvousPoints.size === 1)
 
-    expect(peers[0].rendezvous._rendezvousConns.get(peers[1].peerId.toB58String())).to.exist()
-    expect(peers[1].rendezvous._rendezvousConns.get(peers[0].peerId.toB58String())).to.exist()
+    expect(peers[0].rendezvous._rendezvousPoints.get(peers[1].peerId.toB58String())).to.exist()
+    expect(peers[1].rendezvous._rendezvousPoints.get(peers[0].peerId.toB58String())).to.exist()
 
     await connection.close()
 
     // Wait event propagation
-    await pWaitFor(() => peers[0].rendezvous._rendezvousConns.size === 0)
+    await pWaitFor(() => peers[0].rendezvous._rendezvousPoints.size === 0)
   })
 })

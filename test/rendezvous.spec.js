@@ -110,11 +110,11 @@ describe('rendezvous', () => {
       await connectPeers(peers[0], peers[1])
 
       // Register
-      expect(peers[1].rendezvous._server.registrations.size).to.eql(0)
+      expect(peers[1].rendezvous._server.nsRegistrations.size).to.eql(0)
       await peers[0].rendezvous.register(namespace)
 
-      expect(peers[1].rendezvous._server.registrations.size).to.eql(1)
-      expect(peers[1].rendezvous._server.registrations.get(namespace)).to.exist()
+      expect(peers[1].rendezvous._server.nsRegistrations.size).to.eql(1)
+      expect(peers[1].rendezvous._server.nsRegistrations.get(namespace)).to.exist()
 
       await peers[1].rendezvous.stop()
       await peers[1].stop()
@@ -136,15 +136,15 @@ describe('rendezvous', () => {
       await connectPeers(peers[0], peers[1])
 
       // Register
-      expect(peers[1].rendezvous._server.registrations.size).to.eql(0)
+      expect(peers[1].rendezvous._server.nsRegistrations.size).to.eql(0)
       await peers[0].rendezvous.register(namespace)
 
-      expect(peers[1].rendezvous._server.registrations.size).to.eql(1)
-      expect(peers[1].rendezvous._server.registrations.get(namespace)).to.exist()
+      expect(peers[1].rendezvous._server.nsRegistrations.size).to.eql(1)
+      expect(peers[1].rendezvous._server.nsRegistrations.get(namespace)).to.exist()
 
       // Unregister
       await peers[0].rendezvous.unregister(namespace)
-      expect(peers[1].rendezvous._server.registrations.size).to.eql(0)
+      expect(peers[1].rendezvous._server.nsRegistrations.size).to.eql(0)
 
       await peers[1].rendezvous.stop()
       await peers[1].stop()
@@ -203,6 +203,38 @@ describe('rendezvous', () => {
       expect(registers[0].multiaddrs).to.eql(peers[0].multiaddrs)
       expect(registers[0].ns).to.eql(namespace)
       expect(registers[0].ttl).to.exist()
+    })
+
+    it('discover find registered peer for namespace once (cookie usage)', async () => {
+      await connectPeers(peers[0], peers[1])
+      await connectPeers(peers[2], peers[1])
+
+      const registers = []
+
+      // Peer2 does not discovery any peer registered
+      for await (const reg of peers[2].rendezvous.discover(namespace)) { // eslint-disable-line
+        throw new Error('no registers should exist')
+      }
+
+      // Peer0 register itself on namespace (connected to Peer1)
+      await peers[0].rendezvous.register(namespace)
+
+      // Peer2 discovers Peer0 registered in Peer1
+      for await (const reg of peers[2].rendezvous.discover(namespace)) {
+        registers.push(reg)
+      }
+
+      expect(registers).to.have.lengthOf(1)
+      expect(registers[0].id.toB58String()).to.eql(peers[0].peerId.toB58String())
+      expect(registers[0].multiaddrs).to.eql(peers[0].multiaddrs)
+      expect(registers[0].ns).to.eql(namespace)
+      expect(registers[0].ttl).to.exist()
+
+      for await (const reg of peers[2].rendezvous.discover(namespace)) {
+        registers.push(reg)
+      }
+
+      expect(registers).to.have.lengthOf(1)
     })
   })
 })
