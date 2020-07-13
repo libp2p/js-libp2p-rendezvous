@@ -21,24 +21,69 @@ const rpc = require('./rpc')
 class RendezvousServer {
   /**
      * @constructor
-     * @param {object} params
-     * @param {Registrar} params.registrar
+     * @param {Registrar} registrar
+     * @param {object} options
+     * @param {number} options.gcInterval
      */
-  constructor ({ registrar }) {
+  constructor (registrar, { gcInterval = 3e5 } = {}) {
     this._registrar = registrar
+    this._gcInterval = gcInterval
 
     /**
      * Registrations per namespace.
      * @type {Map<string, Map<string, Registration>>}
      */
     this.registrations = new Map()
+  }
+
+  /**
+   * Start rendezvous server for handling rendezvous streams and gc.
+   * @returns {void}
+   */
+  start () {
+    if (this._interval) {
+      return
+    }
+
+    log('starting')
+
+    // Garbage collection
+    this._interval = setInterval(this._gc, this._gcInterval)
 
     // Incoming streams handling
     this._registrar.handle(PROTOCOL_MULTICODEC, rpc(this))
+
+    log('started')
   }
 
-  // TODO: Should we have a start method to gv the expired registrations?
-  // I am removing them on discover, but it should be useful to have a gc too
+  /**
+   * Stops rendezvous server gc and clears registrations
+   */
+  stop () {
+    clearInterval(this._interval)
+    this._interval = undefined
+    this.registrations.clear()
+
+    log('stopped')
+  }
+
+  /**
+   * Garbage collector to removed outdated registrations.
+   * @returns {void}
+   */
+  _gc () {
+    const now = Date.now()
+
+    // Iterate namespaces
+    this.registrations.forEach((nsRegistrations) => {
+      // Iterate registrations for namespaces
+      nsRegistrations.forEach((reg, idStr) => {
+        if (now >= reg.expiration) {
+          nsRegistrations.delete(idStr)
+        }
+      })
+    })
+  }
 
   /**
    * Add a peer registration to a namespace.

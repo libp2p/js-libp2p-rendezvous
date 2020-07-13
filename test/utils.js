@@ -24,6 +24,20 @@ const defaultConfig = {
 }
 
 /**
+ * Create Perr Id.
+ * @param {Object} [properties]
+ * @param {number} [properties.number] number of peers (default: 1).
+ * @return {Promise<Array<PeerId>>}
+ */
+async function createPeerId ({ number = 1 }) {
+  const peerIds = await pTimes(number, (i) => PeerId.createFromJSON(Peers[i]))
+
+  return peerIds
+}
+
+module.exports.createPeerId = createPeerId
+
+/**
  * Create libp2p nodes.
  * @param {Object} [properties]
  * @param {Object} [properties.config]

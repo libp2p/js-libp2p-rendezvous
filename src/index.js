@@ -22,7 +22,8 @@ const { Message } = require('./proto')
 const MESSAGE_TYPE = Message.MessageType
 
 const defaultServerOptions = {
-  enabled: true
+  enabled: true,
+  gcInterval: 3e5
 }
 
 /**
@@ -40,6 +41,7 @@ class Rendezvous {
    * @param {number} [params.discovery.interval = 5000]
    * @param {object} [params.server]
    * @param {boolean} [params.server.enabled = true]
+   * @param {number} [params.server.gcInterval = 3e5]
    */
   constructor ({ libp2p, options = {} }) {
     this._libp2p = libp2p
@@ -79,7 +81,8 @@ class Rendezvous {
 
     // Create Rendezvous point if enabled
     if (this._serverOptions.enabled) {
-      this._server = new Server({ registrar: this._registrar })
+      this._server = new Server(this._registrar, this._serverOptions)
+      this._server.start()
     }
 
     // register protocol with topology
@@ -109,8 +112,12 @@ class Rendezvous {
     log('stopping')
 
     clearInterval(this._interval)
+
     // unregister protocol and handlers
     await this._registrar.unregister(this._registrarId)
+    if (this._serverOptions.enabled) {
+      this._server.stop()
+    }
 
     this._registrarId = undefined
     log('stopped')
