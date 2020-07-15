@@ -43,25 +43,24 @@ class Rendezvous {
    * @constructor
    * @param {object} params
    * @param {Libp2p} params.libp2p
-   * @param {object} params.options
    * @param {Array<string>} [params.namespaces = []]
    * @param {object} [params.discovery]
-   * @param {number} [params.discovery.interval = 5000]
+   * @param {number} [params.discovery.interval = 5e3]
    * @param {object} [params.server]
    * @param {boolean} [params.server.enabled = true]
    * @param {number} [params.server.gcInterval = 3e5]
    */
-  constructor ({ libp2p, options = {} }) {
+  constructor ({ libp2p, namespaces = [], discovery = {}, server = {} }) {
     this._libp2p = libp2p
     this._peerId = libp2p.peerId
     this._registrar = libp2p.registrar
 
-    this._namespaces = options.namespaces || []
-    this.discovery = new Discovery(this, options.discovery)
+    this._namespaces = namespaces
+    this.discovery = new Discovery(this, discovery)
 
     this._serverOptions = {
       ...defaultServerOptions,
-      ...options.server || {}
+      ...server
     }
 
     /**
@@ -84,9 +83,9 @@ class Rendezvous {
 
   /**
    * Register the rendezvous protocol in the libp2p node.
-   * @returns {Promise<void>}
+   * @returns {void}
    */
-  async start () {
+  start () {
     if (this._registrarId) {
       return
     }
@@ -107,18 +106,17 @@ class Rendezvous {
         onDisconnect: this._onPeerDisconnected
       }
     })
-    this._registrarId = await this._registrar.register(topology)
-
-    log('started')
+    this._registrarId = this._registrar.register(topology)
 
     this._keepRegistrations()
+    log('started')
   }
 
   /**
    * Unregister the rendezvous protocol and the streams with other peers will be closed.
-   * @returns {Promise<void>}
+   * @returns {void}
    */
-  async stop () {
+  stop () {
     if (!this._registrarId) {
       return
     }
@@ -128,7 +126,7 @@ class Rendezvous {
     clearInterval(this._interval)
 
     // unregister protocol and handlers
-    await this._registrar.unregister(this._registrarId)
+    this._registrar.unregister(this._registrarId)
     if (this._serverOptions.enabled) {
       this._server.stop()
     }
@@ -153,7 +151,7 @@ class Rendezvous {
       const promises = []
 
       this._namespaces.forEach((ns) => {
-        promises.push(this.register(ns))
+        promises.push(this.register(ns, { keep: false }))
       })
 
       return Promise.all(promises)
@@ -195,10 +193,12 @@ class Rendezvous {
   /**
    * Register the peer in a given namespace
    * @param {string} ns
-   * @param {number} [ttl = 7200e3] registration ttl in ms (minimum 120)
-   * @returns {Promise<number>}
+   * @param {object} [options]
+   * @param {number} [options.ttl = 7200e3] registration ttl in ms (minimum 120)
+   * @param {number} [options.keep = true] register over time to guarantee availability.
+   * @returns {Promise<number>} rendezvous register ttl.
    */
-  async register (ns, ttl = 7200e3) {
+  async register (ns, { ttl = 7200e3, keep = true } = {}) {
     if (!ns) {
       throw errCode(new Error('a namespace must be provided'), errCodes.INVALID_NAMESPACE)
     }
@@ -253,7 +253,7 @@ class Rendezvous {
         throw new Error('unexpected message received')
       }
 
-      return recMessage.registerResponse.ttl
+      return recMessage.registerResponse.ttl // TODO: convert to ms
     }
 
     for (const id of this._rendezvousPoints.keys()) {
@@ -262,6 +262,10 @@ class Rendezvous {
 
     // Return first ttl
     const [returnTtl] = await Promise.all(registerTasks)
+
+    // Keep registering if enabled
+    keep && this._namespaces.push(ns)
+
     return returnTtl
   }
 
@@ -307,6 +311,7 @@ class Rendezvous {
       unregisterTasks.push(taskFn(id))
     }
 
+    this._namespaces.filter((keeptNampesace) => keeptNampesace !== ns)
     await Promise.all(unregisterTasks)
   }
 

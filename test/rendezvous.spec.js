@@ -70,10 +70,8 @@ describe('rendezvous', () => {
       peers.forEach((peer, index) => {
         const rendezvous = new Rendezvous({
           libp2p: peer,
-          options: {
-            server: {
-              enabled: index !== 0
-            }
+          server: {
+            enabled: index !== 0
           }
         })
         rendezvous.start()
@@ -95,7 +93,7 @@ describe('rendezvous', () => {
     })
 
     it('register throws error if ttl is too small', async () => {
-      await expect(peers[0].rendezvous.register(namespace, 10))
+      await expect(peers[0].rendezvous.register(namespace, { ttl: 10 }))
         .to.eventually.rejected()
         .and.have.property('code', errCodes.INVALID_TTL)
     })

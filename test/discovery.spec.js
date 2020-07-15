@@ -25,13 +25,11 @@ describe('rendezvous discovery', () => {
     peers.forEach((peer, index) => {
       const rendezvous = new Rendezvous({
         libp2p: peer,
-        options: {
-          discovery: {
-            interval: 1000
-          },
-          server: {
-            enabled: index === 0
-          }
+        discovery: {
+          interval: 1000
+        },
+        server: {
+          enabled: index === 0
         }
       })
       rendezvous.start()
@@ -107,14 +105,12 @@ describe('interface-discovery', () => {
     peers.forEach((peer, index) => {
       const rendezvous = new Rendezvous({
         libp2p: peer,
-        options: {
-          discovery: {
-            interval: 1000
-          },
-          namespaces: ['test-namespace'],
-          server: {
-            enabled: index === 0
-          }
+        discovery: {
+          interval: 1000
+        },
+        namespaces: ['test-namespace'],
+        server: {
+          enabled: index === 0
         }
       })
       rendezvous.start()

@@ -6,8 +6,10 @@ log.error = debug('libp2p:redezvous:discovery:error')
 
 const { EventEmitter } = require('events')
 
+const { codes: errCodes } = require('./errors')
+
 const defaultOptions = {
-  interval: 5000
+  interval: 5e3
 }
 
 /**
@@ -57,12 +59,19 @@ class Discovery extends EventEmitter {
    */
   _discover () {
     this._rendezvous._namespaces.forEach(async (ns) => {
-      for await (const reg of this._rendezvous.discover(ns)) {
-        // TODO: interface-peer-discovery with signedPeerRecord
-        this.emit('peer', {
-          id: reg.id,
-          multiaddrs: reg.multiaddrs
-        })
+      try {
+        for await (const reg of this._rendezvous.discover(ns)) {
+          // TODO: interface-peer-discovery with signedPeerRecord
+          this.emit('peer', {
+            id: reg.id,
+            multiaddrs: reg.multiaddrs
+          })
+        }
+      } catch (err) {
+        // It will fail while there are no connected rendezvous servers
+        if (err.code !== errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS) {
+          throw err
+        }
       }
     })
   }

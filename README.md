@@ -19,18 +19,67 @@ See https://github.com/libp2p/specs/tree/master/rendezvous for more details
 
 ## API
 
+### constructor
+
+Creating an instance of Rendezvous.
+
+`const rendezvous = new Rendezvous({ libp2p })`
+
+#### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| params | `object` | rendezvous parameters |
+| params.libp2p | `Libp2p` | a libp2p node instance |
+| params.namespaces | `Array<string>` | namespaces to keep registering and discovering over time (default: `[]`) |
+| params.server | `object` | rendezvous server options |
+| params.server.enabled | `boolean` | rendezvous server enabled (default: `true`) |
+| params.server.gcInterval | `number` | rendezvous garbage collector interval (default: `3e5`) |
+| params.discovery | `object` | rendezvous peer discovery options |
+| params.discovery.interval | `number` | automatic rendezvous peer discovery interval (default: `5e3`) |
+
+### rendezvous.start
+
+Register the rendezvous protocol topology into libp2p and starts its internal services. The rendezvous server will be started if enabled, as well as the service to keep self registrations available.
+
+`rendezvous.start()`
+
+When registering to new namespaces from the API, the new namespace will be added to the registrations to keep by default.
+
+### rendezvous.stop
+
+Unregister the rendezvous protocol and the streams with other peers will be closed.
+
+`rendezvous.stop()`
+
+### rendezvous.discovery.start
+
+Starts the rendezvous automatic discovery service.
+
+`rendezvous.discovery.start()`
+
+Like other libp2p discovery protocols, it will emit `peer` events when new peers are discovered.
+
+### rendezvous.discovery.stop
+
+Stops the rendezvous automatic discovery service.
+
+`rendezvous.discovery.stop()`
+
 ### rendezvous.register
 
 Registers the peer in a given namespace.
 
-`rendezvous.register(namespace, [ttl])`
+`rendezvous.register(namespace, [options])`
 
 #### Parameters
 
 | Name | Type | Description |
 |------|------|-------------|
 | namespace | `string` | namespace to register |
-| ttl | `number` | registration ttl in ms (default: `7200e3` and minimum `120`) |
+| options | `object` | rendezvous registrations options |
+| options.ttl | `number` | registration ttl in ms (default: `7200e3` and minimum `120`) |
+| options.keep | `boolean` | register over time to guarantee availability (default: `true`) |
 
 #### Returns
 
@@ -75,7 +124,7 @@ await rendezvous.unregister(namespace)
 
 Discovers peers registered under a given namespace.
 
-`rendezvous.discover(namespace, [limit], [cookie])`
+`rendezvous.discover(namespace, [limit])`
 
 #### Parameters
 
@@ -83,7 +132,6 @@ Discovers peers registered under a given namespace.
 |------|------|-------------|
 | namespace | `string` | namespace to discover |
 | limit | `number` | limit of peers to discover |
-| cookie | `Buffer` |  |
 
 #### Returns
 

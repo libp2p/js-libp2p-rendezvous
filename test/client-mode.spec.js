@@ -16,7 +16,7 @@ describe('client mode', () => {
 
   afterEach(async () => {
     peer && await peer.stop()
-    rendezvous && await rendezvous.stop()
+    rendezvous && rendezvous.stop()
   })
 
   it('registers a rendezvous handler by default', async () => {
@@ -25,7 +25,7 @@ describe('client mode', () => {
 
     const spyHandle = sinon.spy(peer.registrar, '_handle')
 
-    await rendezvous.start()
+    rendezvous.start()
 
     expect(spyHandle).to.have.property('callCount', 1)
   })
@@ -34,16 +34,14 @@ describe('client mode', () => {
     [peer] = await createPeer()
     rendezvous = new Rendezvous({
       libp2p: peer,
-      options: {
-        server: {
-          enabled: false
-        }
+      server: {
+        enabled: false
       }
     })
 
     const spyHandle = sinon.spy(peer.registrar, '_handle')
 
-    await rendezvous.start()
+    rendezvous.start()
     expect(spyHandle).to.have.property('callCount', 0)
   })
 })
