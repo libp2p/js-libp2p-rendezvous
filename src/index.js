@@ -229,7 +229,7 @@ class Rendezvous {
           addrs
         },
         ns,
-        ttl // TODO: convert to seconds
+        ttl: ttl * 1e-3 // Convert to seconds
       }
     })
 
@@ -253,7 +253,7 @@ class Rendezvous {
         throw new Error('unexpected message received')
       }
 
-      return recMessage.registerResponse.ttl // TODO: convert to ms
+      return recMessage.registerResponse.ttl * 1e3 // convert to ms
     }
 
     for (const id of this._rendezvousPoints.keys()) {
@@ -331,7 +331,7 @@ class Rendezvous {
       id: PeerId.createFromBytes(r.peer.id),
       multiaddrs: r.peer.addrs && r.peer.addrs.map((a) => multiaddr(a)),
       ns: r.ns,
-      ttl: r.ttl
+      ttl: r.ttl * 1e3 // convert to ms
     })
 
     // Local search if Server

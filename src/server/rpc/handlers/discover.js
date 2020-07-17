@@ -56,7 +56,7 @@ module.exports = (rendezvousPoint) => {
               id: r.peerId.toBytes(),
               addrs: r.addrs
             },
-            ttl: r.expiration - Date.now()
+            ttl: (r.expiration - Date.now()) * 1e-3 // convert to seconds
           })),
           status: RESPONSE_STATUS.OK
         }

@@ -52,7 +52,7 @@ module.exports = (rendezvousPoint) => {
         msg.register.ns,
         peerId,
         msg.register.peer.addrs,
-        msg.register.ttl
+        msg.register.ttl * 1e3 // convert to ms
       )
 
       return {
