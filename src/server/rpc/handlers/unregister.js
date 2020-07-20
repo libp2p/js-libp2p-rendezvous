@@ -24,7 +24,6 @@ module.exports = (rendezvousPoint) => {
       if (!msg.unregister.id.equals(peerId.toBytes())) {
         log.error('unauthorized peer id to unregister')
 
-        // TODO: auth validation of peerId? -- there is no answer
         return
       }
 
@@ -37,6 +36,5 @@ module.exports = (rendezvousPoint) => {
     } catch (err) {
       log.error(err)
     }
-    // TODO: internal error? -- there is no answer
   }
 }
