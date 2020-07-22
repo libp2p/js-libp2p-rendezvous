@@ -76,7 +76,7 @@ describe('rendezvous discovery', () => {
     await defer.promise
   })
 
-  it.skip('peer1 should not discover peer2 if it registers in a different namespace', async () => {
+  it('peer1 should not discover peer2 if it registers in a different namespace', async () => {
     const namespace1 = 'test-namespace1'
     const namespace2 = 'test-namespace2'
     await peers[1].rendezvous.register(namespace1)
@@ -88,11 +88,11 @@ describe('rendezvous discovery', () => {
     peers[1].rendezvous.discovery.start()
 
     // Register
-    expect(peers[0].rendezvous._server.nsRegistrations.size).to.eql(0)
     await peers[2].rendezvous.register(namespace2)
-    expect(peers[0].rendezvous._server.nsRegistrations.size).to.eql(1)
 
-    await delay(1500)
+    await delay(1000)
+
+    peers[1].rendezvous.discovery.removeAllListeners()
   })
 })
 

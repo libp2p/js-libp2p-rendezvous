@@ -355,38 +355,42 @@ class Rendezvous {
       })
 
       // Send discover message and wait for response
-      const { stream } = await rp.connection.newStream(PROTOCOL_MULTICODEC)
-      const [response] = await pipe(
-        [message],
-        lp.encode(),
-        stream,
-        lp.decode(),
-        toBuffer,
-        collect
-      )
+      try {
+        const { stream } = await rp.connection.newStream(PROTOCOL_MULTICODEC)
+        const [response] = await pipe(
+          [message],
+          lp.encode(),
+          stream,
+          lp.decode(),
+          toBuffer,
+          collect
+        )
 
-      const recMessage = Message.decode(response)
+        const recMessage = Message.decode(response)
 
-      if (!recMessage.type === MESSAGE_TYPE.DISCOVER_RESPONSE) {
-        throw new Error('unexpected message received')
-      }
-
-      // Iterate over registrations response
-      for (const r of recMessage.discoverResponse.registrations) {
-        // track registrations
-        yield registrationTransformer(r)
-
-        // Store cookie
-        rpCookies.set(ns, recMessage.discoverResponse.cookie.toString())
-        this._rendezvousPoints.set(id, {
-          connection: rp.connection,
-          cookies: rpCookies
-        })
-
-        limit--
-        if (limit === 0) {
-          return
+        if (!recMessage.type === MESSAGE_TYPE.DISCOVER_RESPONSE) {
+          throw new Error('unexpected message received')
         }
+
+        // Iterate over registrations response
+        for (const r of recMessage.discoverResponse.registrations) {
+          // track registrations
+          yield registrationTransformer(r)
+
+          // Store cookie
+          rpCookies.set(ns, recMessage.discoverResponse.cookie.toString())
+          this._rendezvousPoints.set(id, {
+            connection: rp.connection,
+            cookies: rpCookies
+          })
+
+          limit--
+          if (limit === 0) {
+            return
+          }
+        }
+      } catch (err) {
+        log.error(err)
       }
     }
   }
