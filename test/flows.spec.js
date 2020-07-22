@@ -72,8 +72,7 @@ describe('flows', () => {
         registers.push(reg)
       }
       expect(registers).to.have.lengthOf(1)
-      expect(registers[0].id.toB58String()).to.eql(peers[0].peerId.toB58String())
-      expect(registers[0].multiaddrs).to.eql(peers[0].multiaddrs)
+      expect(registers[0].signedPeerRecord).to.exist()
       expect(registers[0].ns).to.eql(namespace)
       expect(registers[0].ttl).to.exist()
 

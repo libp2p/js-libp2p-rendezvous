@@ -7,55 +7,54 @@ chai.use(require('chai-as-promised'))
 const { expect } = chai
 
 const delay = require('delay')
-const sinon = require('sinon')
+
 const multiaddr = require('multiaddr')
+const Envelope = require('libp2p/src/record/envelope')
+const PeerRecord = require('libp2p/src/record/peer-record')
 
 const RendezvousServer = require('../src/server')
 
-const { createPeerId } = require('./utils')
+const { createPeer, createPeerId, createSignedPeerRecord } = require('./utils')
 
-const registrar = {
-  handle: () => { }
-}
 const testNamespace = 'test-namespace'
-const multiaddrs = [multiaddr('/ip4/127.0.0.1/tcp/0')].map((m) => m.buffer)
+const multiaddrs = [multiaddr('/ip4/127.0.0.1/tcp/0')]
 
 describe('rendezvous server', () => {
+  const signedPeerRecords = []
   let rServer
   let peerIds
+  let libp2p
 
   before(async () => {
     peerIds = await createPeerId({ number: 3 })
+
+    // Create a signed peer record per peer
+    for (const peerId of peerIds) {
+      const spr = await createSignedPeerRecord(peerId, multiaddrs)
+      signedPeerRecords.push(spr)
+    }
   })
 
-  afterEach(() => {
+  beforeEach(async () => {
+    [libp2p] = await createPeer()
+  })
+
+  afterEach(async () => {
+    libp2p && await libp2p.stop()
     rServer && rServer.stop()
-  })
-
-  it('calls registrar handle on start once', () => {
-    rServer = new RendezvousServer(registrar)
-
-    // Spy for handle
-    const spyHandle = sinon.spy(registrar, 'handle')
-
-    rServer.start()
-    expect(spyHandle).to.have.property('callCount', 1)
-
-    rServer.start()
-    expect(spyHandle).to.have.property('callCount', 1)
   })
 
   it('can add registrations to multiple namespaces', () => {
     const otherNamespace = 'other-namespace'
-    rServer = new RendezvousServer(registrar)
+    rServer = new RendezvousServer(libp2p)
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
     // Add registration for peer 1 in a different namespace
-    rServer.addRegistration(otherNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(otherNamespace, peerIds[0], signedPeerRecords[0], 1000)
 
     // Add registration for peer 2 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     const { registrations: testNsRegistrations } = rServer.getRegistrations(testNamespace)
     expect(testNsRegistrations).to.have.lengthOf(2)
@@ -65,12 +64,12 @@ describe('rendezvous server', () => {
   })
 
   it('should be able to limit registrations to get', () => {
-    rServer = new RendezvousServer(registrar)
+    rServer = new RendezvousServer(libp2p)
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
     // Add registration for peer 2 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     let r = rServer.getRegistrations(testNamespace, { limit: 1 })
     expect(r.registrations).to.have.lengthOf(1)
@@ -82,12 +81,12 @@ describe('rendezvous server', () => {
   })
 
   it('can remove registrations from a peer in a given namespace', () => {
-    rServer = new RendezvousServer(registrar)
+    rServer = new RendezvousServer(libp2p)
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
     // Add registration for peer 2 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     let r = rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(2)
@@ -103,12 +102,12 @@ describe('rendezvous server', () => {
 
   it('can remove all registrations from a peer', () => {
     const otherNamespace = 'other-namespace'
-    rServer = new RendezvousServer(registrar)
+    rServer = new RendezvousServer(libp2p)
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
     // Add registration for peer 1 in a different namespace
-    rServer.addRegistration(otherNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(otherNamespace, peerIds[0], signedPeerRecords[0], 1000)
 
     let r = rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(1)
@@ -128,16 +127,16 @@ describe('rendezvous server', () => {
 
   it('can attempt to remove a registration for a non existent namespace', () => {
     const otherNamespace = 'other-namespace'
-    rServer = new RendezvousServer(registrar)
+    rServer = new RendezvousServer(libp2p)
 
     rServer.removeRegistration(otherNamespace, peerIds[0])
   })
 
   it('can attempt to remove a registration for a non existent peer', () => {
-    rServer = new RendezvousServer(registrar)
+    rServer = new RendezvousServer(libp2p)
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
 
     let r = rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(1)
@@ -150,11 +149,11 @@ describe('rendezvous server', () => {
   })
 
   it('gc expired records', async () => {
-    rServer = new RendezvousServer(registrar, { gcInterval: 300 })
+    rServer = new RendezvousServer(libp2p, { gcInterval: 300 })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 500)
-    rServer.addRegistration(testNamespace, peerIds[1], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 500)
+    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     let r = rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(2)
@@ -169,21 +168,25 @@ describe('rendezvous server', () => {
     expect(r.registrations).to.have.lengthOf(0)
   })
 
-  it('only new peers should be returned if cookie given', () => {
-    rServer = new RendezvousServer(registrar)
+  it('only new peers should be returned if cookie given', async () => {
+    rServer = new RendezvousServer(libp2p)
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
 
     // Get current registrations
     const { cookie, registrations } = rServer.getRegistrations(testNamespace)
     expect(cookie).to.exist()
     expect(registrations).to.exist()
     expect(registrations).to.have.lengthOf(1)
-    expect(registrations[0].peerId.toString()).to.eql(peerIds[0].toString())
+    expect(registrations[0].signedPeerRecord).to.exist()
+
+    // Validate peer0
+    const envelope = await Envelope.openAndCertify(registrations[0].signedPeerRecord, PeerRecord.DOMAIN)
+    expect(envelope.peerId.toString()).to.eql(peerIds[0].toString())
 
     // Add registration for peer 2 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     // Get second registration by using the cookie
     const { cookie: cookie2, registrations: registrations2 } = rServer.getRegistrations(testNamespace, { cookie })
@@ -191,7 +194,11 @@ describe('rendezvous server', () => {
     expect(cookie2).to.eql(cookie)
     expect(registrations2).to.exist()
     expect(registrations2).to.have.lengthOf(1)
-    expect(registrations2[0].peerId.toString()).to.eql(peerIds[1].toString())
+    expect(registrations2[0].signedPeerRecord).to.exist()
+
+    // Validate peer1
+    const envelope2 = await Envelope.openAndCertify(registrations2[0].signedPeerRecord, PeerRecord.DOMAIN)
+    expect(envelope2.peerId.toString()).to.eql(peerIds[1].toString())
 
     // If no cookie provided, all registrations are given
     const { registrations: registrations3 } = rServer.getRegistrations(testNamespace)
@@ -200,10 +207,10 @@ describe('rendezvous server', () => {
   })
 
   it('no new peers should be returned if there are not new peers since latest query', () => {
-    rServer = new RendezvousServer(registrar)
+    rServer = new RendezvousServer(libp2p)
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
 
     // Get current registrations
     const { cookie, registrations } = rServer.getRegistrations(testNamespace)
@@ -219,21 +226,25 @@ describe('rendezvous server', () => {
     expect(registrations2).to.have.lengthOf(0)
   })
 
-  it('new data for a peer should be returned if registration updated', () => {
-    rServer = new RendezvousServer(registrar)
+  it('new data for a peer should be returned if registration updated', async () => {
+    rServer = new RendezvousServer(libp2p)
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
 
     // Get current registrations
     const { cookie, registrations } = rServer.getRegistrations(testNamespace)
     expect(cookie).to.exist()
     expect(registrations).to.exist()
     expect(registrations).to.have.lengthOf(1)
-    expect(registrations[0].peerId.toString()).to.eql(peerIds[0].toString())
+    expect(registrations[0].signedPeerRecord).to.exist()
+
+    // Validate peer0
+    const envelope = await Envelope.openAndCertify(registrations[0].signedPeerRecord, PeerRecord.DOMAIN)
+    expect(envelope.peerId.toString()).to.eql(peerIds[0].toString())
 
     // Add new registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 1000)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 1000)
 
     // Get registrations with same cookie and no new registration
     const { cookie: cookie2, registrations: registrations2 } = rServer.getRegistrations(testNamespace, { cookie })
@@ -241,15 +252,19 @@ describe('rendezvous server', () => {
     expect(cookie2).to.eql(cookie)
     expect(registrations2).to.exist()
     expect(registrations2).to.have.lengthOf(1)
-    expect(registrations2[0].peerId.toString()).to.eql(peerIds[0].toString())
+    expect(registrations2[0].signedPeerRecord).to.exist()
+
+    // Validate peer0
+    const envelope2 = await Envelope.openAndCertify(registrations2[0].signedPeerRecord, PeerRecord.DOMAIN)
+    expect(envelope2.peerId.toString()).to.eql(peerIds[0].toString())
   })
 
   it('garbage collector should remove cookies of discarded records', async () => {
-    rServer = new RendezvousServer(registrar, { gcInterval: 300 })
+    rServer = new RendezvousServer(libp2p, { gcInterval: 300 })
     rServer.start()
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[0], multiaddrs, 500)
+    rServer.addRegistration(testNamespace, peerIds[0], signedPeerRecords[0], 500)
 
     // Get current registrations
     const { cookie, registrations } = rServer.getRegistrations(testNamespace)

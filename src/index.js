@@ -11,8 +11,6 @@ const { collect } = require('streaming-iterables')
 const { toBuffer } = require('it-buffer')
 
 const MulticodecTopology = require('libp2p-interfaces/src/topology/multicodec-topology')
-const multiaddr = require('multiaddr')
-const PeerId = require('peer-id')
 
 const Discovery = require('./discovery')
 const Server = require('./server')
@@ -94,7 +92,7 @@ class Rendezvous {
 
     // Create Rendezvous point if enabled
     if (this._serverOptions.enabled) {
-      this._server = new Server(this._registrar, this._serverOptions)
+      this._server = new Server(this._libp2p, this._serverOptions)
       this._server.start()
     }
 
@@ -147,6 +145,8 @@ class Rendezvous {
       if (!this._rendezvousPoints.size) {
         return
       }
+
+      log('update current registrations')
 
       const promises = []
 
@@ -207,15 +207,6 @@ class Rendezvous {
       throw errCode(new Error('a valid ttl must be provided (bigger than 120)'), errCodes.INVALID_TTL)
     }
 
-    const addrs = []
-    for (const m of this._libp2p.multiaddrs) {
-      if (!multiaddr.isMultiaddr(m)) {
-        throw errCode(new Error('one or more of the provided multiaddrs is not valid'), errCodes.INVALID_MULTIADDRS)
-      }
-
-      addrs.push(m.buffer)
-    }
-
     // Are there available rendezvous servers?
     if (!this._rendezvousPoints.size) {
       throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
@@ -224,10 +215,7 @@ class Rendezvous {
     const message = Message.encode({
       type: MESSAGE_TYPE.REGISTER,
       register: {
-        peer: {
-          id: this._peerId.toBytes(),
-          addrs
-        },
+        signedPeerRecord: this._libp2p.peerStore.addressBook.getRawEnvelope(this._peerId),
         ns,
         ttl: ttl * 1e-3 // Convert to seconds
       }
@@ -319,7 +307,7 @@ class Rendezvous {
    * Discover peers registered under a given namespace
    * @param {string} ns
    * @param {number} [limit]
-   * @returns {AsyncIterable<{ id: PeerId, multiaddrs: Array<Multiaddr>, ns: string, ttl: number }>}
+   * @returns {AsyncIterable<{ signedPeerRecord: Buffer, ns: string, ttl: number }>}
    */
   async * discover (ns, limit) {
     // Are there available rendezvous servers?
@@ -328,13 +316,12 @@ class Rendezvous {
     }
 
     const registrationTransformer = (r) => ({
-      id: PeerId.createFromBytes(r.peer.id),
-      multiaddrs: r.peer.addrs && r.peer.addrs.map((a) => multiaddr(a)),
+      signedPeerRecord: r.signedPeerRecord,
       ns: r.ns,
       ttl: r.ttl * 1e3 // convert to ms
     })
 
-    // Local search if Server
+    // Local search if Server enabled
     if (this._server) {
       const cookieSelf = this._cookiesSelf.get(ns)
       const { cookie: cookieS, registrations: localRegistrations } = this._server.getRegistrations(ns, { limit, cookie: cookieSelf })

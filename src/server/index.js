@@ -4,17 +4,25 @@ const debug = require('debug')
 const log = debug('libp2p:redezvous-server')
 log.error = debug('libp2p:redezvous-server:error')
 
+const PeerId = require('peer-id')
+
 const { PROTOCOL_MULTICODEC, MAX_LIMIT } = require('../constants')
 const rpc = require('./rpc')
 
 /**
 * Rendezvous registration.
-* @typedef {Object} Registration
-* @property {string} id
-* @property {PeerId} peerId
-* @property {Array<Buffer>} addrs
-* @property {number} expiration
+* @typedef {Object} Register
+* @property {string} ns
+* @property {Buffer} signedPeerRecord
+* @property {number} ttl
 */
+
+/**
+ * Namespace registration.
+ * @typedef {Object} NamespaceRegistration
+ * @property {string} id
+ * @property {number} expiration
+ */
 
 /**
  * Libp2p rendezvous server.
@@ -22,17 +30,18 @@ const rpc = require('./rpc')
 class RendezvousServer {
   /**
      * @constructor
-     * @param {Registrar} registrar
+     * @param {Libp2p} libp2p
      * @param {object} options
      * @param {number} options.gcInterval
      */
-  constructor (registrar, { gcInterval = 3e5 } = {}) {
-    this._registrar = registrar
+  constructor (libp2p, { gcInterval = 3e5 } = {}) {
+    this._registrar = libp2p.registrar
+    this._peerStore = libp2p.peerStore
     this._gcInterval = gcInterval
 
     /**
      * Registrations per namespace.
-     * @type {Map<string, Map<string, Registration>>}
+     * @type {Map<string, Map<string, NamespaceRegistration>>}
      */
     this.nsRegistrations = new Map()
 
@@ -67,6 +76,7 @@ class RendezvousServer {
 
   /**
    * Stops rendezvous server gc and clears registrations
+   * @returns {void}
    */
   stop () {
     clearInterval(this._interval)
@@ -83,16 +93,20 @@ class RendezvousServer {
    * @returns {void}
    */
   _gc () {
+    log('gc starting')
+
     const now = Date.now()
     const removedIds = []
 
     // Iterate namespaces
     this.nsRegistrations.forEach((nsEntry) => {
       // Iterate registrations for namespaces
-      nsEntry.forEach((reg, idStr) => {
-        if (now >= reg.expiration) {
+      nsEntry.forEach((nsReg, idStr) => {
+        if (now >= nsReg.expiration) {
           nsEntry.delete(idStr)
-          removedIds.push(reg.id)
+          removedIds.push(nsReg.id)
+
+          log(`gc removed namespace entry for ${idStr}`)
         }
       })
     })
@@ -114,37 +128,38 @@ class RendezvousServer {
    * Add a peer registration to a namespace.
    * @param {string} ns
    * @param {PeerId} peerId
-   * @param {Array<Buffer>} addrs
+   * @param {Envelope} envelope
    * @param {number} ttl
    * @returns {void}
    */
-  addRegistration (ns, peerId, addrs, ttl) {
-    const nsEntry = this.nsRegistrations.get(ns) || new Map()
+  addRegistration (ns, peerId, envelope, ttl) {
+    const nsReg = this.nsRegistrations.get(ns) || new Map()
 
-    nsEntry.set(peerId.toB58String(), {
+    nsReg.set(peerId.toB58String(), {
       id: String(Math.random() + Date.now()),
-      peerId,
-      addrs,
       expiration: Date.now() + ttl
     })
 
-    this.nsRegistrations.set(ns, nsEntry)
+    this.nsRegistrations.set(ns, nsReg)
+
+    // Store envelope in the AddressBook
+    this._peerStore.addressBook.consumePeerRecord(envelope)
   }
 
   /**
-   * Remove rengistration of a given namespace to a peer
+   * Remove registration of a given namespace to a peer
    * @param {string} ns
    * @param {PeerId} peerId
    * @returns {void}
    */
   removeRegistration (ns, peerId) {
-    const nsEntry = this.nsRegistrations.get(ns)
+    const nsReg = this.nsRegistrations.get(ns)
 
-    if (nsEntry) {
-      nsEntry.delete(peerId.toB58String())
+    if (nsReg) {
+      nsReg.delete(peerId.toB58String())
 
       // Remove registrations map to namespace if empty
-      if (!nsEntry.size) {
+      if (!nsReg.size) {
         this.nsRegistrations.delete(ns)
       }
       log('removed existing registrations for the namespace - peer pair:', ns, peerId.toB58String())
@@ -152,16 +167,16 @@ class RendezvousServer {
   }
 
   /**
-   * Remove registrations of a given peer
+   * Remove all registrations of a given peer
    * @param {PeerId} peerId
    * @returns {void}
    */
   removePeerRegistrations (peerId) {
-    for (const [ns, reg] of this.nsRegistrations.entries()) {
-      reg.delete(peerId.toB58String())
+    for (const [ns, nsReg] of this.nsRegistrations.entries()) {
+      nsReg.delete(peerId.toB58String())
 
       // Remove registrations map to namespace if empty
-      if (!reg.size) {
+      if (!nsReg.size) {
         this.nsRegistrations.delete(ns)
       }
     }
@@ -182,21 +197,25 @@ class RendezvousServer {
     const registrations = []
     const cRegistrations = this.cookieRegistrations.get(cookie) || new Set()
 
-    for (const [idStr, reg] of nsEntry.entries()) {
-      if (reg.expiration <= Date.now()) {
+    for (const [idStr, nsReg] of nsEntry.entries()) {
+      if (nsReg.expiration <= Date.now()) {
         // Clean outdated registration from registrations and cookie record
         nsEntry.delete(idStr)
-        cRegistrations.delete(reg.id)
+        cRegistrations.delete(nsReg.id)
         continue
       }
 
       // If this record was already sent, continue
-      if (cRegistrations.has(reg.id)) {
+      if (cRegistrations.has(nsReg.id)) {
         continue
       }
 
-      cRegistrations.add(reg.id)
-      registrations.push(reg)
+      cRegistrations.add(nsReg.id)
+      registrations.push({
+        ns,
+        signedPeerRecord: this._peerStore.addressBook.getRawEnvelope(PeerId.createFromB58String(idStr)),
+        ttl: Date.now() - nsReg.expiration
+      })
 
       // Stop if reached limit
       if (registrations.length === limit) {

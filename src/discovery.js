@@ -6,6 +6,9 @@ log.error = debug('libp2p:redezvous:discovery:error')
 
 const { EventEmitter } = require('events')
 
+const Envelope = require('libp2p/src/record/envelope')
+const PeerRecord = require('libp2p/src/record/peer-record')
+
 const { codes: errCodes } = require('./errors')
 
 const defaultOptions = {
@@ -61,10 +64,13 @@ class Discovery extends EventEmitter {
     this._rendezvous._namespaces.forEach(async (ns) => {
       try {
         for await (const reg of this._rendezvous.discover(ns)) {
-          // TODO: interface-peer-discovery with signedPeerRecord
+          const envelope = await Envelope.openAndCertify(reg.signedPeerRecord, PeerRecord.DOMAIN)
+          const rec = PeerRecord.createFromProtobuf(envelope.payload)
+
+          // TODO: interface-peer-discovery with signedPeerRecord instead
           this.emit('peer', {
-            id: reg.id,
-            multiaddrs: reg.multiaddrs
+            id: envelope.peerId,
+            multiaddrs: rec.multiaddrs
           })
         }
       } catch (err) {

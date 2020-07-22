@@ -5,6 +5,9 @@ const debug = require('debug')
 const log = debug('libp2p:redezvous:protocol:register')
 log.error = debug('libp2p:redezvous:protocol:register:error')
 
+const Envelope = require('libp2p/src/record/envelope')
+const PeerRecord = require('libp2p/src/record/peer-record')
+
 const { Message } = require('../../../proto')
 const MESSAGE_TYPE = Message.MessageType
 const RESPONSE_STATUS = Message.ResponseStatus
@@ -17,23 +20,11 @@ module.exports = (rendezvousPoint) => {
    *
    * @param {PeerId} peerId
    * @param {Message} msg
-   * @returns {Message}
+   * @returns {Promise<Message>}
    */
-  return function register (peerId, msg) {
+  return async function register (peerId, msg) {
     try {
       log(`register ${peerId.toB58String()}: trying register on ${msg.register.ns}`)
-
-      // Validate auth
-      if (!msg.register.peer.id.equals(peerId.toBytes())) {
-        log.error('unauthorized peer id to register')
-
-        return {
-          type: MESSAGE_TYPE.REGISTER_RESPONSE,
-          registerResponse: {
-            status: RESPONSE_STATUS.E_NOT_AUTHORIZED
-          }
-        }
-      }
 
       // Validate namespace
       if (!msg.register.ns || msg.register.ns > MAX_NS_LENGTH) {
@@ -47,11 +38,26 @@ module.exports = (rendezvousPoint) => {
         }
       }
 
+      // Open and verify envelope signature
+      const envelope = await Envelope.openAndCertify(msg.register.signedPeerRecord, PeerRecord.DOMAIN)
+
+      // Validate auth
+      if (!envelope.peerId.equals(peerId.toBytes())) {
+        log.error('unauthorized peer id to register')
+
+        return {
+          type: MESSAGE_TYPE.REGISTER_RESPONSE,
+          registerResponse: {
+            status: RESPONSE_STATUS.E_NOT_AUTHORIZED
+          }
+        }
+      }
+
       // Add registration
       rendezvousPoint.addRegistration(
         msg.register.ns,
         peerId,
-        msg.register.peer.addrs,
+        envelope,
         msg.register.ttl * 1e3 // convert to ms
       )
 

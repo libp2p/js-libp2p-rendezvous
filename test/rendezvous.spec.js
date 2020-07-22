@@ -7,6 +7,9 @@ chai.use(require('chai-as-promised'))
 const { expect } = chai
 const sinon = require('sinon')
 
+const Envelope = require('libp2p/src/record/envelope')
+const PeerRecord = require('libp2p/src/record/peer-record')
+
 const Rendezvous = require('../src')
 const { codes: errCodes } = require('../src/errors')
 
@@ -196,11 +199,17 @@ describe('rendezvous', () => {
       for await (const reg of peers[2].rendezvous.discover(namespace)) {
         registers.push(reg)
       }
+
       expect(registers).to.have.lengthOf(1)
-      expect(registers[0].id.toB58String()).to.eql(peers[0].peerId.toB58String())
-      expect(registers[0].multiaddrs).to.eql(peers[0].multiaddrs)
+      expect(registers[0].signedPeerRecord).to.exist()
       expect(registers[0].ns).to.eql(namespace)
       expect(registers[0].ttl).to.exist()
+
+      // Validate envelope
+      const envelope = await Envelope.openAndCertify(registers[0].signedPeerRecord, PeerRecord.DOMAIN)
+      const rec = PeerRecord.createFromProtobuf(envelope.payload)
+
+      expect(rec.multiaddrs).to.eql(peers[0].multiaddrs)
     })
 
     it('discover find registered peer for namespace once (cookie usage)', async () => {
@@ -223,8 +232,7 @@ describe('rendezvous', () => {
       }
 
       expect(registers).to.have.lengthOf(1)
-      expect(registers[0].id.toB58String()).to.eql(peers[0].peerId.toB58String())
-      expect(registers[0].multiaddrs).to.eql(peers[0].multiaddrs)
+      expect(registers[0].signedPeerRecord).to.exist()
       expect(registers[0].ns).to.eql(namespace)
       expect(registers[0].ttl).to.exist()
 

@@ -10,6 +10,8 @@ const pWaitFor = require('p-wait-for')
 
 const Libp2p = require('libp2p')
 const multiaddr = require('multiaddr')
+const Envelope = require('libp2p/src/record/envelope')
+const PeerRecord = require('libp2p/src/record/peer-record')
 
 const Peers = require('./fixtures/peers')
 const { MULTIADDRS_WEBSOCKETS } = require('./fixtures/browser')
@@ -79,3 +81,16 @@ async function connectPeers (peer, otherPeer) {
 }
 
 module.exports.connectPeers = connectPeers
+
+async function createSignedPeerRecord (peerId, multiaddrs) {
+  const pr = new PeerRecord({
+    peerId,
+    multiaddrs
+  })
+
+  const envelope = await Envelope.seal(pr, peerId)
+
+  return envelope
+}
+
+module.exports.createSignedPeerRecord = createSignedPeerRecord

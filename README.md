@@ -137,7 +137,7 @@ Discovers peers registered under a given namespace.
 
 | Type | Description |
 |------|-------------|
-| `AsyncIterable<{ id: PeerId, signedPeerRecord: Envelope, ns: string, ttl: number }>` | Async Iterable registrations |
+| `AsyncIterable<{ signedPeerRecord: Envelope, ns: string, ttl: number }>` | Async Iterable registrations |
 
 #### Example
 
@@ -146,7 +146,7 @@ Discovers peers registered under a given namespace.
 await rendezvous.register(namespace)
 
 for await (const reg of rendezvous.discover(namespace)) {
-  console.log(reg.id, reg.signedPeerRecord, reg.ns, reg.ttl)
+  console.log(reg.signedPeerRecord, reg.ns, reg.ttl)
 }
 ```
 

@@ -23,14 +23,12 @@ message Message {
     E_UNAVAILABLE       = 400;
   }
 
-  message PeerInfo {
-    optional bytes id = 1;
-    repeated bytes addrs = 2;
-  }
-
   message Register {
     optional string ns = 1;
-    optional PeerInfo peer = 2;
+    // signedPeerRecord contains a serialized SignedEnvelope containing a PeerRecord,
+    // signed by the sending node. It contains the same addresses as the listenAddrs field, but
+    // in a form that lets us share authenticated addrs with other peers.
+    optional bytes signedPeerRecord = 2;
     optional int64 ttl = 3; // in seconds
   }
 

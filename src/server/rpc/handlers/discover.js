@@ -51,12 +51,9 @@ module.exports = (rendezvousPoint) => {
         discoverResponse: {
           cookie: Buffer.from(cookie),
           registrations: registrations.map((r) => ({
-            ns: msg.discover.ns,
-            peer: {
-              id: r.peerId.toBytes(),
-              addrs: r.addrs
-            },
-            ttl: (r.expiration - Date.now()) * 1e-3 // convert to seconds
+            ns: r.ns,
+            signedPeerRecord: r.signedPeerRecord,
+            ttl: r.ttl * 1e-3 // convert to seconds
           })),
           status: RESPONSE_STATUS.OK
         }
