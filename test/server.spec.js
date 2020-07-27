@@ -279,5 +279,7 @@ describe('rendezvous server', () => {
 
     expect(rServer.nsRegistrations.get(testNamespace).size).to.eql(0)
     expect(rServer.cookieRegistrations.get(cookie)).to.not.exist()
+
+    rServer.stop()
   })
 })

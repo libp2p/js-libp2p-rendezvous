@@ -17,6 +17,26 @@ See https://github.com/libp2p/specs/tree/master/rendezvous for more details
 
 [Vasco Santos](https://github.com/vasco-santos).
 
+## Usage
+
+```js
+const Libp2p = require('libp2p')
+const Rendezvous = require('libp2p-rendezvous')
+
+const libp2p = await Libp2p.create({
+  // check on js-libp2p repo the options to provide
+})
+const rendezvous = new Rendezvous({ libp2p }) // Set other options below
+
+await node.start()
+rendezvous.start()
+
+// ...
+
+rendezvous.stop()
+await node.stop()
+```
+
 ## API
 
 ### constructor

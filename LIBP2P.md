@@ -39,4 +39,4 @@ If the discovery service is disabled, the rendezvous API also allows users to di
 
 When a libp2p node running the rendezvous protocol is stopping, it will unregister from all the namespaces previously registered.
 
-In the event of a rendezvous client getting connected to a second rendezvous server, it will propagate its registrations to it. The rendezvous server will aso clean its registrations for a peer when it is not connected with it anymore.
+In the event of a rendezvous client getting connected to a second rendezvous server, it will propagate its registrations to it. The rendezvous server will also clean its registrations for a peer when it is not connected with it anymore.

@@ -52,6 +52,7 @@ class Discovery extends EventEmitter {
    * @returns {void}
    */
   stop () {
+    this.removeAllListeners()
     clearInterval(this._interval)
     this._interval = null
   }

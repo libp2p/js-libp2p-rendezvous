@@ -93,6 +93,7 @@ describe('rendezvous discovery', () => {
     await delay(1000)
 
     peers[1].rendezvous.discovery.removeAllListeners()
+    peers[1].rendezvous.discovery.stop()
   })
 })
 
