@@ -5,6 +5,9 @@ const debug = require('debug')
 const log = debug('libp2p:redezvous:protocol:discover')
 log.error = debug('libp2p:redezvous:protocol:discover:error')
 
+const fromString = require('uint8arrays/from-string')
+const toString = require('uint8arrays/to-string')
+
 const { Message } = require('../../../proto')
 const MESSAGE_TYPE = Message.MessageType
 const RESPONSE_STATUS = Message.ResponseStatus
@@ -41,7 +44,7 @@ module.exports = (rendezvousPoint) => {
 
       // Get registrations
       const options = {
-        cookie: msg.discover.cookie ? msg.discover.cookie.toString() : undefined,
+        cookie: msg.discover.cookie ? toString(msg.discover.cookie) : undefined,
         limit: msg.discover.limit
       }
       const { registrations, cookie } = rendezvousPoint.getRegistrations(msg.discover.ns, options)
@@ -49,7 +52,7 @@ module.exports = (rendezvousPoint) => {
       return {
         type: MESSAGE_TYPE.DISCOVER_RESPONSE,
         discoverResponse: {
-          cookie: Buffer.from(cookie),
+          cookie: fromString(cookie),
           registrations: registrations.map((r) => ({
             ns: r.ns,
             signedPeerRecord: r.signedPeerRecord,

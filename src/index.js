@@ -9,6 +9,8 @@ const pipe = require('it-pipe')
 const lp = require('it-length-prefixed')
 const { collect } = require('streaming-iterables')
 const { toBuffer } = require('it-buffer')
+const fromString = require('uint8arrays/from-string')
+const toString = require('uint8arrays/to-string')
 
 const MulticodecTopology = require('libp2p-interfaces/src/topology/multicodec-topology')
 
@@ -40,17 +42,14 @@ class Rendezvous {
    * @constructor
    * @param {object} params
    * @param {Libp2p} params.libp2p
-   * @param {Array<string>} [params.namespaces = []]
    * @param {object} [params.server]
    * @param {boolean} [params.server.enabled = true]
    * @param {number} [params.server.gcInterval = 3e5]
    */
-  constructor ({ libp2p, namespaces = [], server = {} }) {
+  constructor ({ libp2p, server = {} }) {
     this._libp2p = libp2p
     this._peerId = libp2p.peerId
     this._registrar = libp2p.registrar
-
-    this._namespaces = namespaces
 
     this._serverOptions = {
       ...defaultServerOptions,
@@ -102,7 +101,6 @@ class Rendezvous {
     })
     this._registrarId = this._registrar.register(topology)
 
-    this._keepRegistrations()
     log('started')
   }
 
@@ -130,31 +128,6 @@ class Rendezvous {
     this._cookiesSelf.clear()
 
     log('stopped')
-  }
-
-  /**
-   * Keep registrations updated on servers.
-   * @returns {void}
-   */
-  _keepRegistrations () {
-    const register = () => {
-      if (!this._rendezvousPoints.size) {
-        return
-      }
-
-      log('update current registrations')
-
-      const promises = []
-
-      this._namespaces.forEach((ns) => {
-        promises.push(this.register(ns, { keep: false }))
-      })
-
-      return Promise.all(promises)
-    }
-
-    register()
-    this._interval = setInterval(register, 1000)
   }
 
   /**
@@ -191,7 +164,6 @@ class Rendezvous {
    * @param {string} ns
    * @param {object} [options]
    * @param {number} [options.ttl = 7200e3] registration ttl in ms (minimum 120)
-   * @param {number} [options.keep = true] register over time to guarantee availability.
    * @returns {Promise<number>} rendezvous register ttl.
    */
   async register (ns, { ttl = 7200e3, keep = true } = {}) {
@@ -247,9 +219,6 @@ class Rendezvous {
     // Return first ttl
     const [returnTtl] = await Promise.all(registerTasks)
 
-    // Keep registering if enabled
-    keep && this._namespaces.push(ns)
-
     return returnTtl
   }
 
@@ -295,7 +264,6 @@ class Rendezvous {
       unregisterTasks.push(taskFn(id))
     }
 
-    this._namespaces.filter((keeptNampesace) => keeptNampesace !== ns)
     await Promise.all(unregisterTasks)
   }
 
@@ -346,7 +314,7 @@ class Rendezvous {
         discover: {
           ns,
           limit,
-          cookie: cookie ? Buffer.from(cookie) : undefined
+          cookie: cookie ? fromString(cookie) : undefined
         }
       })
 
@@ -374,7 +342,7 @@ class Rendezvous {
           yield registrationTransformer(r)
 
           // Store cookie
-          rpCookies.set(ns, recMessage.discoverResponse.cookie.toString())
+          rpCookies.set(ns, toString(recMessage.discoverResponse.cookie))
           this._rendezvousPoints.set(id, {
             connection: rp.connection,
             cookies: rpCookies

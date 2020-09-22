@@ -5,6 +5,8 @@ const debug = require('debug')
 const log = debug('libp2p:redezvous:protocol:unregister')
 log.error = debug('libp2p:redezvous:protocol:unregister:error')
 
+const equals = require('uint8arrays/equals')
+
 module.exports = (rendezvousPoint) => {
   /**
    * Process `Unregister` Rendezvous messages.
@@ -21,7 +23,7 @@ module.exports = (rendezvousPoint) => {
       }
 
       // Validate auth
-      if (!msg.unregister.id.equals(peerId.toBytes())) {
+      if (!equals(msg.unregister.id, peerId.toBytes())) {
         log.error('unauthorized peer id to unregister')
 
         return

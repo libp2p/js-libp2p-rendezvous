@@ -28,13 +28,13 @@ const libp2p = await Libp2p.create({
 })
 const rendezvous = new Rendezvous({ libp2p }) // Set other options below
 
-await node.start()
+await libp2p.start()
 rendezvous.start()
 
 // ...
 
 rendezvous.stop()
-await node.stop()
+await libp2p.stop()
 ```
 
 ## API
@@ -51,7 +51,6 @@ Creating an instance of Rendezvous.
 |------|------|-------------|
 | params | `object` | rendezvous parameters |
 | params.libp2p | `Libp2p` | a libp2p node instance |
-| params.namespaces | `Array<string>` | namespaces to keep registering and discovering over time (default: `[]`) |
 | params.server | `object` | rendezvous server options |
 | params.server.enabled | `boolean` | rendezvous server enabled (default: `true`) |
 | params.server.gcInterval | `number` | rendezvous garbage collector interval (default: `3e5`) |
