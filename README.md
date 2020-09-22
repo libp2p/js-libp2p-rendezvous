@@ -55,8 +55,6 @@ Creating an instance of Rendezvous.
 | params.server | `object` | rendezvous server options |
 | params.server.enabled | `boolean` | rendezvous server enabled (default: `true`) |
 | params.server.gcInterval | `number` | rendezvous garbage collector interval (default: `3e5`) |
-| params.discovery | `object` | rendezvous peer discovery options |
-| params.discovery.interval | `number` | automatic rendezvous peer discovery interval (default: `5e3`) |
 
 ### rendezvous.start
 
@@ -71,20 +69,6 @@ When registering to new namespaces from the API, the new namespace will be added
 Unregister the rendezvous protocol and the streams with other peers will be closed.
 
 `rendezvous.stop()`
-
-### rendezvous.discovery.start
-
-Starts the rendezvous automatic discovery service.
-
-`rendezvous.discovery.start()`
-
-Like other libp2p discovery protocols, it will emit `peer` events when new peers are discovered.
-
-### rendezvous.discovery.stop
-
-Stops the rendezvous automatic discovery service.
-
-`rendezvous.discovery.stop()`
 
 ### rendezvous.register
 

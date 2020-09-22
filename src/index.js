@@ -12,7 +12,6 @@ const { toBuffer } = require('it-buffer')
 
 const MulticodecTopology = require('libp2p-interfaces/src/topology/multicodec-topology')
 
-const Discovery = require('./discovery')
 const Server = require('./server')
 const { codes: errCodes } = require('./errors')
 const { PROTOCOL_MULTICODEC } = require('./constants')
@@ -42,19 +41,16 @@ class Rendezvous {
    * @param {object} params
    * @param {Libp2p} params.libp2p
    * @param {Array<string>} [params.namespaces = []]
-   * @param {object} [params.discovery]
-   * @param {number} [params.discovery.interval = 5e3]
    * @param {object} [params.server]
    * @param {boolean} [params.server.enabled = true]
    * @param {number} [params.server.gcInterval = 3e5]
    */
-  constructor ({ libp2p, namespaces = [], discovery = {}, server = {} }) {
+  constructor ({ libp2p, namespaces = [], server = {} }) {
     this._libp2p = libp2p
     this._peerId = libp2p.peerId
     this._registrar = libp2p.registrar
 
     this._namespaces = namespaces
-    this.discovery = new Discovery(this, discovery)
 
     this._serverOptions = {
       ...defaultServerOptions,
