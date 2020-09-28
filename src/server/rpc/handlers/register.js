@@ -65,7 +65,7 @@ module.exports = (rendezvousPoint) => {
         type: MESSAGE_TYPE.REGISTER_RESPONSE,
         registerResponse: {
           status: RESPONSE_STATUS.OK,
-          ttt: msg.register.ttl
+          ttl: msg.register.ttl
         }
       }
     } catch (err) {
