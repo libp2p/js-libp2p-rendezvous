@@ -8,9 +8,7 @@ const WebSockets = require('libp2p-websockets')
 const Muxer = require('libp2p-mplex')
 const { NOISE: Crypto } = require('libp2p-noise')
 
-const Rendezvous = require('.')
-
-let libp2p, rendezvous
+let libp2p
 
 const before = async () => {
   // Use the last peer
@@ -38,13 +36,9 @@ const before = async () => {
   })
   
   await libp2p.start()
-
-  // rendezvous = new Rendezvous({ libp2p })
-  // await rendezvous.start()
 }
 
 const after = async () => {
-  // await rendezvous.stop()
   await libp2p.stop()
 }
 
