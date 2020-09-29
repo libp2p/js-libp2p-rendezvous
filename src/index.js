@@ -1,8 +1,8 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:redezvous')
-log.error = debug('libp2p:redezvous:error')
+const log = debug('libp2p:rendezvous')
+log.error = debug('libp2p:rendezvous:error')
 
 const errCode = require('err-code')
 const pipe = require('it-pipe')
@@ -85,7 +85,7 @@ class Rendezvous {
 
     log('starting')
 
-    // Create Rendezvous point if enabled
+    // Create and start Rendezvous server if enabled
     if (this._serverOptions.enabled) {
       this._server = new Server(this._libp2p, this._serverOptions)
       this._server.start()
@@ -166,7 +166,7 @@ class Rendezvous {
    * @param {number} [options.ttl = 7200e3] registration ttl in ms (minimum 120)
    * @returns {Promise<number>} rendezvous register ttl.
    */
-  async register (ns, { ttl = 7200e3, keep = true } = {}) {
+  async register (ns, { ttl = 7200e3 } = {}) {
     if (!ns) {
       throw errCode(new Error('a namespace must be provided'), errCodes.INVALID_NAMESPACE)
     }
@@ -319,46 +319,41 @@ class Rendezvous {
       })
 
       // Send discover message and wait for response
-      try {
-        const { stream } = await rp.connection.newStream(PROTOCOL_MULTICODEC)
-        const [response] = await pipe(
-          [message],
-          lp.encode(),
-          stream,
-          lp.decode(),
-          toBuffer,
-          collect
-        )
+      const { stream } = await rp.connection.newStream(PROTOCOL_MULTICODEC)
+      const [response] = await pipe(
+        [message],
+        lp.encode(),
+        stream,
+        lp.decode(),
+        toBuffer,
+        collect
+      )
 
-        const recMessage = Message.decode(response)
+      const recMessage = Message.decode(response)
 
-        if (!recMessage.type === MESSAGE_TYPE.DISCOVER_RESPONSE) {
-          throw new Error('unexpected message received')
+      if (!recMessage.type === MESSAGE_TYPE.DISCOVER_RESPONSE) {
+        throw new Error('unexpected message received')
+      }
+
+      // Iterate over registrations response
+      for (const r of recMessage.discoverResponse.registrations) {
+        // track registrations
+        yield registrationTransformer(r)
+
+        // Store cookie
+        rpCookies.set(ns, toString(recMessage.discoverResponse.cookie))
+        this._rendezvousPoints.set(id, {
+          connection: rp.connection,
+          cookies: rpCookies
+        })
+
+        limit--
+        if (limit === 0) {
+          return
         }
-
-        // Iterate over registrations response
-        for (const r of recMessage.discoverResponse.registrations) {
-          // track registrations
-          yield registrationTransformer(r)
-
-          // Store cookie
-          rpCookies.set(ns, toString(recMessage.discoverResponse.cookie))
-          this._rendezvousPoints.set(id, {
-            connection: rp.connection,
-            cookies: rpCookies
-          })
-
-          limit--
-          if (limit === 0) {
-            return
-          }
-        }
-      } catch (err) {
-        log.error(err)
       }
     }
   }
 }
 
-Rendezvous.tag = 'rendezvous'
 module.exports = Rendezvous

@@ -2,8 +2,8 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:redezvous:protocol:discover')
-log.error = debug('libp2p:redezvous:protocol:discover:error')
+const log = debug('libp2p:rendezvous:protocol:discover')
+log.error = debug('libp2p:rendezvous:protocol:discover:error')
 
 const fromString = require('uint8arrays/from-string')
 const toString = require('uint8arrays/to-string')

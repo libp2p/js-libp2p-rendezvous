@@ -57,11 +57,9 @@ Creating an instance of Rendezvous.
 
 ### rendezvous.start
 
-Register the rendezvous protocol topology into libp2p and starts its internal services. The rendezvous server will be started if enabled, as well as the service to keep self registrations available.
+Register the rendezvous protocol topology into libp2p. The rendezvous server will be started if enabled, as well as the service to keep self registrations available.
 
 `rendezvous.start()`
-
-When registering to new namespaces from the API, the new namespace will be added to the registrations to keep by default.
 
 ### rendezvous.stop
 
@@ -82,7 +80,6 @@ Registers the peer in a given namespace.
 | namespace | `string` | namespace to register |
 | options | `object` | rendezvous registrations options |
 | options.ttl | `number` | registration ttl in ms (default: `7200e3` and minimum `120`) |
-| options.keep | `boolean` | register over time to guarantee availability (default: `true`) |
 
 #### Returns
 

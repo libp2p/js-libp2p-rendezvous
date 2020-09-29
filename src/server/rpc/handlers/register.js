@@ -2,8 +2,8 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:redezvous:protocol:register')
-log.error = debug('libp2p:redezvous:protocol:register:error')
+const log = debug('libp2p:rendezvous:protocol:register')
+log.error = debug('libp2p:rendezvous:protocol:register:error')
 
 const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')

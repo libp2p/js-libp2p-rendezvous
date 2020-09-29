@@ -2,8 +2,8 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:redezvous:protocol:unregister')
-log.error = debug('libp2p:redezvous:protocol:unregister:error')
+const log = debug('libp2p:rendezvous:protocol:unregister')
+log.error = debug('libp2p:rendezvous:protocol:unregister:error')
 
 const equals = require('uint8arrays/equals')
 

@@ -1,8 +1,8 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:redezvous-point:rpc')
-log.error = debug('libp2p:redezvous-point:rpc:error')
+const log = debug('libp2p:rendezvous-point:rpc')
+log.error = debug('libp2p:rendezvous-point:rpc:error')
 
 const pipe = require('it-pipe')
 const lp = require('it-length-prefixed')

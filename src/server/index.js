@@ -1,8 +1,8 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:redezvous-server')
-log.error = debug('libp2p:redezvous-server:error')
+const log = debug('libp2p:rendezvous-server')
+log.error = debug('libp2p:rendezvous-server:error')
 
 const PeerId = require('peer-id')
 
@@ -31,8 +31,8 @@ class RendezvousServer {
   /**
      * @constructor
      * @param {Libp2p} libp2p
-     * @param {object} options
-     * @param {number} options.gcInterval
+     * @param {object} [options]
+     * @param {number} [options.gcInterval = 3e5]
      */
   constructor (libp2p, { gcInterval = 3e5 } = {}) {
     this._registrar = libp2p.registrar
