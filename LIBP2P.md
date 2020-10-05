@@ -18,9 +18,8 @@ const node = await Libp2p.create({
   },
   config: {
     rendezvous: {
-      enabled: true,
       server: {
-        enabled: true
+        enabled: false
       }
     }
   }
