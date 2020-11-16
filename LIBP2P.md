@@ -30,6 +30,6 @@ While `js-libp2p` supports the rendezvous protocol out of the box through its di
 
 ## Libp2p Flow
 
-When a libp2p node with the rendezvous protocol enabled starts, it should start by connecting to a rendezvous server. The rendezvous server can be added to the bootstrap nodes or manually dialed. WHen a rendezvous server is connected, the node can ask for nodes in given namespaces. An example of a namespace could be a relay namespace, so that undiable nodes can register themselves as reachable through that relay.
+When a libp2p node with the rendezvous protocol enabled starts, it should start by connecting to a rendezvous server. The rendezvous server can be added to the bootstrap nodes or manually dialed. When a rendezvous server is connected, the node can ask for nodes in given namespaces. An example of a namespace could be a relay namespace, so that undialable nodes can register themselves as reachable through that relay.
 
 When a libp2p node running the rendezvous protocol is stopping, it will unregister from all the namespaces previously registered.
