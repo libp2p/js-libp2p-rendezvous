@@ -2,7 +2,7 @@
 
 const multiaddr = require('multiaddr')
 
-function getAnnounceAddresses(argv) {
+function getAnnounceAddresses (argv) {
   const announceAddr = argv.announceMultiaddrs || argv.am
   const announceAddresses = announceAddr ? [multiaddr(announceAddr)] : []
 
@@ -21,7 +21,7 @@ function getAnnounceAddresses(argv) {
 
 module.exports.getAnnounceAddresses = getAnnounceAddresses
 
-function getListenAddresses(argv) {
+function getListenAddresses (argv) {
   const listenAddr = argv.listenMultiaddrs || argv.lm || '/ip4/127.0.0.1/tcp/15002/ws'
   const listenAddresses = [multiaddr(listenAddr)]
 
