@@ -12,6 +12,7 @@ module.exports = (server) => {
 
   /**
    * Get the message handler matching the passed in type.
+   *
    * @param {number} type
    * @returns {function(PeerId, Message, function(Error, Message))}
    */

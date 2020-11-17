@@ -15,11 +15,12 @@ module.exports = (rendezvous) => {
   const getMessageHandler = handlers(rendezvous)
 
   /**
-  * Process incoming Rendezvous messages.
-  * @param {PeerId} peerId
-  * @param {Message} msg
-  * @returns {Promise<Message>}
-  */
+   * Process incoming Rendezvous messages.
+   *
+   * @param {PeerId} peerId
+   * @param {Message} msg
+   * @returns {Promise<Message>}
+   */
   function handleMessage (peerId, msg) {
     const handler = getMessageHandler(msg.type)
 
@@ -33,9 +34,10 @@ module.exports = (rendezvous) => {
 
   /**
    * Handle incoming streams on the rendezvous protocol.
+   *
    * @param {Object} props
    * @param {DuplexStream} props.stream
-   * @param {Connection} props.connection connection
+   * @param {Connection} props.connection - connection
    * @returns {Promise<void>}
    */
   return async function onIncomingStream ({ stream, connection }) {

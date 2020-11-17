@@ -15,27 +15,36 @@ const toString = require('uint8arrays/to-string')
 const MulticodecTopology = require('libp2p-interfaces/src/topology/multicodec-topology')
 
 const { codes: errCodes } = require('./errors')
-const { PROTOCOL_MULTICODEC } = require('./constants')
+const {
+  MAX_DISCOVER_LIMIT,
+  PROTOCOL_MULTICODEC
+} = require('./constants')
 const { Message } = require('./proto')
 const MESSAGE_TYPE = Message.MessageType
 
 /**
-* Rendezvous point contains the connection to a rendezvous server, as well as,
-* the cookies per namespace that the client received.
-* @typedef {Object} RendezvousPoint
-* @property {Connection} connection
-* @property {Map<string, string>} cookies
-*/
+ * @typedef {import('libp2p')} Libp2p
+ */
 
 /**
- * Libp2p Rendezvous.
- * A lightweight mechanism for generalized peer discovery.
+ * Rendezvous point contains the connection to a rendezvous server, as well as,
+ * the cookies per namespace that the client received.
+ *
+ * @typedef {Object} RendezvousPoint
+ * @property {Connection} connection
+ * @property {Map<string, string>} cookies
+ */
+
+/**
+ * @typedef {Object} RendezvousProperties
+ * @property {Libp2p} libp2p
  */
 class Rendezvous {
   /**
-   * @constructor
-   * @param {object} params
-   * @param {Libp2p} params.libp2p
+   * Libp2p Rendezvous. A lightweight mechanism for generalized peer discovery.
+   *
+   * @class
+   * @param {RendezvousProperties} params
    */
   constructor ({ libp2p }) {
     this._libp2p = libp2p
@@ -54,6 +63,7 @@ class Rendezvous {
 
   /**
    * Register the rendezvous protocol in the libp2p node.
+   *
    * @returns {void}
    */
   start () {
@@ -78,6 +88,7 @@ class Rendezvous {
 
   /**
    * Unregister the rendezvous protocol and clear the state.
+   *
    * @returns {void}
    */
   stop () {
@@ -98,9 +109,10 @@ class Rendezvous {
 
   /**
    * Registrar notifies a connection successfully with rendezvous protocol.
+   *
    * @private
-   * @param {PeerId} peerId remote peer-id
-   * @param {Connection} conn connection to the peer
+   * @param {PeerId} peerId - remote peer-id
+   * @param {Connection} conn - connection to the peer
    */
   _onPeerConnected (peerId, conn) {
     const idB58Str = peerId.toB58String()
@@ -111,8 +123,9 @@ class Rendezvous {
 
   /**
    * Registrar notifies a closing connection with rendezvous protocol.
+   *
    * @private
-   * @param {PeerId} peerId peerId
+   * @param {PeerId} peerId - peerId
    */
   _onPeerDisconnected (peerId) {
     const idB58Str = peerId.toB58String()
@@ -123,18 +136,15 @@ class Rendezvous {
 
   /**
    * Register the peer in a given namespace
+   *
    * @param {string} ns
    * @param {object} [options]
-   * @param {number} [options.ttl = 7200e3] registration ttl in ms (minimum 120)
+   * @param {number} [options.ttl = 7.2e6] - registration ttl in ms
    * @returns {Promise<number>} rendezvous register ttl.
    */
-  async register (ns, { ttl = 7200e3 } = {}) {
+  async register (ns, { ttl = 7.2e6 } = {}) {
     if (!ns) {
       throw errCode(new Error('a namespace must be provided'), errCodes.INVALID_NAMESPACE)
-    }
-
-    if (ttl < 120) {
-      throw errCode(new Error('a valid ttl must be provided (bigger than 120)'), errCodes.INVALID_TTL)
     }
 
     // Are there available rendezvous servers?
@@ -171,6 +181,10 @@ class Rendezvous {
         throw new Error('unexpected message received')
       }
 
+      if (recMessage.registerResponse.status !== Message.ResponseStatus.OK) {
+        throw errCode(new Error(recMessage.registerResponse.statusText), recMessage.registerResponse.status)
+      }
+
       return recMessage.registerResponse.ttl * 1e3 // convert to ms
     }
 
@@ -186,6 +200,7 @@ class Rendezvous {
 
   /**
    * Unregister peer from the nampesapce.
+   *
    * @param {string} ns
    * @returns {Promise<void>}
    */
@@ -231,6 +246,7 @@ class Rendezvous {
 
   /**
    * Discover peers registered under a given namespace
+   *
    * @param {string} ns
    * @param {number} [limit]
    * @returns {AsyncIterable<{ signedPeerRecord: Uint8Array, ns: string, ttl: number }>}
@@ -239,6 +255,10 @@ class Rendezvous {
     // Are there available rendezvous servers?
     if (!this._rendezvousPoints.size) {
       throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
+    }
+
+    if (limit > MAX_DISCOVER_LIMIT) {
+      throw errCode(new Error(`a smaller limit must be provided (smaller than ${MAX_DISCOVER_LIMIT})`), errCodes.INVALID_LIMIT)
     }
 
     const registrationTransformer = (r) => ({
@@ -277,6 +297,8 @@ class Rendezvous {
 
       if (!recMessage.type === MESSAGE_TYPE.DISCOVER_RESPONSE) {
         throw new Error('unexpected message received')
+      } else if (recMessage.discoverResponse.status !== Message.ResponseStatus.OK) {
+        throw errCode(new Error(recMessage.discoverResponse.statusText), recMessage.discoverResponse.status)
       }
 
       // Iterate over registrations response

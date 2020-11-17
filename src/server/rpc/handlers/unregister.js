@@ -7,6 +7,14 @@ log.error = debug('libp2p:rendezvous:protocol:unregister:error')
 
 const equals = require('uint8arrays/equals')
 
+/**
+ * @typedef {import('peer-id')} PeerId
+ * @typedef {import('../..')} RendezvousPoint
+ */
+
+/**
+ * @param {RendezvousPoint} rendezvousPoint
+ */
 module.exports = (rendezvousPoint) => {
   /**
    * Process `Unregister` Rendezvous messages.
@@ -19,13 +27,13 @@ module.exports = (rendezvousPoint) => {
       log(`unregister ${peerId.toB58String()}: trying unregister from ${msg.unregister.ns}`)
 
       if (!msg.unregister.id && !msg.unregister.ns) {
-        throw new Error('no peerId or namespace provided')
+        log.error('no peerId or namespace provided')
+        return
       }
 
       // Validate auth
       if (!equals(msg.unregister.id, peerId.toBytes())) {
         log.error('unauthorized peer id to unregister')
-
         return
       }
 

@@ -4,32 +4,128 @@ The rendezvous protocol can be used in different contexts across libp2p. For usi
 
 ## Usage
 
-`js-libp2p` supports the usage of the rendezvous protocol through its configuration. It allows the rendezvous protocol to be enabled, as well as its server mode.
+`js-libp2p` supports the usage of the rendezvous protocol through its configuration. It allows the rendezvous protocol to be enabled and customized.
 
 You can configure it through libp2p as follows:
 
 ```js
 const Libp2p = require('libp2p')
-const Rendezvous = require('libp2p-rendezvous')
 
 const node = await Libp2p.create({
-  modules: {
-    rendezvous: Rendezvous
-  },
-  config: {
-    rendezvous: {
-      server: {
-        enabled: false
-      }
-    }
+  rendezvous: {
+    enabled: true
   }
 })
 ```
-
-While `js-libp2p` supports the rendezvous protocol out of the box through its discovery API, it also provides a rendezvous API that users can interact with. This API allows users to register new rendezvous namespaces, unregister from previously registered namespaces and to manually discover peers.
 
 ## Libp2p Flow
 
 When a libp2p node with the rendezvous protocol enabled starts, it should start by connecting to a rendezvous server. The rendezvous server can be added to the bootstrap nodes or manually dialed. When a rendezvous server is connected, the node can ask for nodes in given namespaces. An example of a namespace could be a relay namespace, so that undialable nodes can register themselves as reachable through that relay.
 
 When a libp2p node running the rendezvous protocol is stopping, it will unregister from all the namespaces previously registered.
+
+## API
+
+This API allows users to register new rendezvous namespaces, unregister from previously registered namespaces and to discover peers on a given namespace.
+
+### Options
+
+| Name | Type | Description |
+|------|------|-------------|
+| options | `object` | rendezvous parameters |
+| options.enabled | `boolean` | is rendezvous enabled |
+
+### rendezvous.start
+
+Register the rendezvous protocol topology into libp2p.
+
+`rendezvous.start()`
+
+### rendezvous.stop
+
+Unregister the rendezvous protocol and the streams with other peers will be closed.
+
+`rendezvous.stop()`
+
+### rendezvous.register
+
+Registers the peer in a given namespace.
+
+`rendezvous.register(namespace, [options])`
+
+#### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| namespace | `string` | namespace to register |
+| [options] | `Object` | rendezvous registrations options |
+| [options.ttl=7.2e6] | `number` | registration ttl in ms |
+
+#### Returns
+
+| Type | Description |
+|------|-------------|
+| `Promise<number>` | Remaining ttl value |
+
+#### Example
+
+```js
+// ...
+const ttl = await rendezvous.register(namespace)
+```
+
+### rendezvous.unregister
+
+Unregisters the peer from a given namespace.
+
+`rendezvous.unregister(namespace)`
+
+#### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| namespace | `string` | namespace to unregister |
+
+#### Returns
+
+| Type | Description |
+|------|-------------|
+| `Promise<void>` | Operation resolved |
+
+#### Example
+
+```js
+// ...
+await rendezvous.register(namespace)
+await rendezvous.unregister(namespace)
+```
+
+### rendezvous.discover
+
+Discovers peers registered under a given namespace.
+
+`rendezvous.discover(namespace, [limit])`
+
+#### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| namespace | `string` | namespace to discover |
+| limit | `number` | limit of peers to discover |
+
+#### Returns
+
+| Type | Description |
+|------|-------------|
+| `AsyncIterable<{ signedPeerRecord: Envelope, ns: string, ttl: number }>` | Async Iterable registrations |
+
+#### Example
+
+```js
+// ...
+await rendezvous.register(namespace)
+
+for await (const reg of rendezvous.discover(namespace)) {
+  console.log(reg.signedPeerRecord, reg.ns, reg.ttl)
+}
+```

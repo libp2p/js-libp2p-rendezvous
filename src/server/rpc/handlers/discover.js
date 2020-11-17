@@ -12,8 +12,16 @@ const { Message } = require('../../../proto')
 const MESSAGE_TYPE = Message.MessageType
 const RESPONSE_STATUS = Message.ResponseStatus
 
-const { MAX_NS_LENGTH, MAX_LIMIT } = require('../../../constants')
+const { codes: errCodes } = require('../../../errors')
 
+/**
+ * @typedef {import('peer-id')} PeerId
+ * @typedef {import('../..')} RendezvousPoint
+ */
+
+/**
+ * @param {RendezvousPoint} rendezvousPoint
+ */
 module.exports = (rendezvousPoint) => {
   /**
    * Process `Discover` Rendezvous messages.
@@ -24,22 +32,24 @@ module.exports = (rendezvousPoint) => {
    */
   return function discover (peerId, msg) {
     try {
-      log(`discover ${peerId.toB58String()}: discover on ${msg.discover.ns}`)
+      const namespace = msg.discover.ns
+      log(`discover ${peerId.toB58String()}: discover on ${namespace}`)
 
       // Validate namespace
-      if (!msg.discover.ns || msg.discover.ns > MAX_NS_LENGTH) {
-        log.error(`invalid namespace received: ${msg.discover.ns}`)
+      if (!namespace || namespace > rendezvousPoint._maxNsLength) {
+        log.error(`invalid namespace received: ${namespace}`)
 
         return {
           type: MESSAGE_TYPE.DISCOVER_RESPONSE,
           discoverResponse: {
-            status: RESPONSE_STATUS.E_INVALID_NAMESPACE
+            status: RESPONSE_STATUS.E_INVALID_NAMESPACE,
+            statusText: `invalid namespace received: "${namespace}". It should be smaller than ${rendezvousPoint._maxNsLength}`
           }
         }
       }
 
-      if (!msg.discover.limit || msg.discover.limit <= 0 || msg.discover.limit > MAX_LIMIT) {
-        msg.discover.limit = MAX_LIMIT
+      if (!msg.discover.limit || msg.discover.limit <= 0 || msg.discover.limit > rendezvousPoint._maxDiscoveryLimit) {
+        msg.discover.limit = rendezvousPoint._maxDiscoveryLimit
       }
 
       // Get registrations
@@ -47,7 +57,8 @@ module.exports = (rendezvousPoint) => {
         cookie: msg.discover.cookie ? toString(msg.discover.cookie) : undefined,
         limit: msg.discover.limit
       }
-      const { registrations, cookie } = rendezvousPoint.getRegistrations(msg.discover.ns, options)
+
+      const { registrations, cookie } = rendezvousPoint.getRegistrations(namespace, options)
 
       return {
         type: MESSAGE_TYPE.DISCOVER_RESPONSE,
@@ -63,6 +74,16 @@ module.exports = (rendezvousPoint) => {
       }
     } catch (err) {
       log.error(err)
+
+      if (err.code === errCodes.INVALID_COOKIE) {
+        return {
+          type: MESSAGE_TYPE.DISCOVER_RESPONSE,
+          discoverResponse: {
+            status: RESPONSE_STATUS.E_INVALID_COOKIE,
+            statusText: `invalid cookie received: "${toString(msg.discover.cookie)}"`
+          }
+        }
+      }
     }
 
     return {

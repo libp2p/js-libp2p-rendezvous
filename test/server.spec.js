@@ -305,7 +305,7 @@ describe('rendezvous server', () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    }, { gcInterval: 300 })
+    }, { gcDelay: 300, gcInterval: 300 })
     await rServer.start()
 
     // Add registration for peer 1 in test namespace

@@ -31,9 +31,11 @@ module.exports.defaultLibp2pConfig = defaultConfig
 
 /**
  * Create Perr Id.
+ *
  * @param {Object} [properties]
- * @param {number} [properties.number = 1] number of peers.
- * @return {Promise<Array<PeerId>>}
+ * @param {number} [properties.number = 1] - number of peers.
+ * @param {boolean} [properties.fixture = true]
+ * @returns {Promise<Array<PeerId>>}
  */
 async function createPeerId ({ number = 1, fixture = true } = {}) {
   const peerIds = await pTimes(number, (i) => fixture
@@ -47,11 +49,12 @@ module.exports.createPeerId = createPeerId
 
 /**
  * Create libp2p nodes.
+ *
  * @param {Object} [properties]
  * @param {Object} [properties.config = {}]
- * @param {number} [properties.number = 1] number of peers
- * @param {boolean} [properties.started = true] nodes should start
- * @return {Promise<Array<Libp2p>>}
+ * @param {number} [properties.number = 1] - number of peers
+ * @param {boolean} [properties.started = true] - nodes should start
+ * @returns {Promise<Array<Libp2p>>}
  */
 async function createPeer ({ number = 1, started = true, config = {} } = {}) {
   const peerIds = await pTimes(number, (i) => PeerId.createFromJSON(Peers[i]))
@@ -75,9 +78,10 @@ module.exports.createPeer = createPeer
 
 /**
  * Create rendezvous server.
+ *
  * @param {Object} [properties]
  * @param {Object} [properties.config = {}]
- * @param {boolean} [properties.started = true] node should start
+ * @param {boolean} [properties.started = true] - node should start
  */
 async function createRendezvousServer ({ config = {}, started = true } = {}) {
   const [peerId] = await createPeerId({ fixture: false })

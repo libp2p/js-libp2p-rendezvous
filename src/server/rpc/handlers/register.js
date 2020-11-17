@@ -12,8 +12,14 @@ const { Message } = require('../../../proto')
 const MESSAGE_TYPE = Message.MessageType
 const RESPONSE_STATUS = Message.ResponseStatus
 
-const { MAX_NS_LENGTH } = require('../../../constants')
+/**
+ * @typedef {import('peer-id')} PeerId
+ * @typedef {import('../..')} RendezvousPoint
+ */
 
+/**
+ * @param {RendezvousPoint} rendezvousPoint
+ */
 module.exports = (rendezvousPoint) => {
   /**
    * Process `Register` Rendezvous messages.
@@ -24,19 +30,36 @@ module.exports = (rendezvousPoint) => {
    */
   return async function register (peerId, msg) {
     try {
-      log(`register ${peerId.toB58String()}: trying register on ${msg.register.ns}`)
+      const namespace = msg.register.ns
 
       // Validate namespace
-      if (!msg.register.ns || msg.register.ns > MAX_NS_LENGTH) {
-        log.error(`invalid namespace received: ${msg.register.ns}`)
+      if (!namespace || namespace > rendezvousPoint._maxNsLength) {
+        log.error(`invalid namespace received: ${namespace}`)
 
         return {
           type: MESSAGE_TYPE.REGISTER_RESPONSE,
           registerResponse: {
-            status: RESPONSE_STATUS.E_INVALID_NAMESPACE
+            status: RESPONSE_STATUS.E_INVALID_NAMESPACE,
+            statusText: `invalid namespace received: "${namespace}". It should be smaller than ${rendezvousPoint._maxNsLength}`
           }
         }
       }
+
+      // Validate ttl
+      const ttl = msg.register.ttl * 1e3 // convert to ms
+      if (!ttl || ttl < rendezvousPoint._minTtl || ttl > rendezvousPoint._maxTtl) {
+        log.error(`invalid ttl received: ${ttl}`)
+
+        return {
+          type: MESSAGE_TYPE.REGISTER_RESPONSE,
+          registerResponse: {
+            status: RESPONSE_STATUS.E_INVALID_TTL,
+            statusText: `invalid ttl received: "${ttl}". It should be bigger than ${rendezvousPoint._minTtl} and smaller than ${rendezvousPoint._maxTtl}`
+          }
+        }
+      }
+
+      log(`register ${peerId.toB58String()}: trying register on ${namespace} by ${ttl} ms`)
 
       // Open and verify envelope signature
       const envelope = await Envelope.openAndCertify(msg.register.signedPeerRecord, PeerRecord.DOMAIN)
@@ -55,10 +78,10 @@ module.exports = (rendezvousPoint) => {
 
       // Add registration
       rendezvousPoint.addRegistration(
-        msg.register.ns,
+        namespace,
         peerId,
         envelope,
-        msg.register.ttl * 1e3 // convert to ms
+        ttl
       )
 
       return {

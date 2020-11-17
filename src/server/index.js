@@ -4,25 +4,40 @@ const debug = require('debug')
 const log = debug('libp2p:rendezvous-server')
 log.error = debug('libp2p:rendezvous-server:error')
 
+const errCode = require('err-code')
+
 const Libp2p = require('libp2p')
 const PeerId = require('peer-id')
 
-const { PROTOCOL_MULTICODEC, MAX_LIMIT } = require('../constants')
+const { codes: errCodes } = require('../errors')
 const rpc = require('./rpc')
+const {
+  MIN_TTL,
+  MAX_TTL,
+  MAX_NS_LENGTH,
+  MAX_DISCOVER_LIMIT,
+  PROTOCOL_MULTICODEC
+} = require('../constants')
 
 /**
-* Rendezvous registration.
-* @typedef {Object} Register
-* @property {string} ns
-* @property {Buffer} signedPeerRecord
-* @property {number} ttl
-*/
-
-/**
- * Namespace registration.
+ * @typedef {Object} Register
+ * @property {string} ns
+ * @property {Buffer} signedPeerRecord
+ * @property {number} ttl
+ *
  * @typedef {Object} NamespaceRegistration
  * @property {string} id
  * @property {number} expiration
+ */
+
+/**
+ * @typedef {Object} RendezvousServerOptions
+ * @property {number} [gcDelay = 3e5] garbage collector delay (default: 5 minutes)
+ * @property {number} [gcInterval = 7.2e6] garbage collector interval (default: 2 hours)
+ * @property {number} [minTtl = MIN_TTL] minimum acceptable ttl to store a registration
+ * @property {number} [maxTtl = MAX_TTL] maxium acceptable ttl to store a registration
+ * @property {number} [maxNsLength = MAX_NS_LENGTH] maxium acceptable namespace length
+ * @property {number} [maxDiscoverLimit = MAX_DISCOVER_LIMIT] maxium acceptable discover limit
  */
 
 /**
@@ -30,24 +45,30 @@ const rpc = require('./rpc')
  */
 class RendezvousServer extends Libp2p {
   /**
-     * @constructor
-     * @param {Libp2pOptions} libp2pOptions
-     * @param {object} [options]
-     * @param {number} [options.gcInterval = 3e5]
-     */
-  constructor (libp2pOptions, { gcInterval = 3e5 } = {}) {
+   * @class
+   * @param {Libp2pOptions} libp2pOptions
+   * @param {RendezvousServerOptions} [options]
+   */
+  constructor (libp2pOptions, options = {}) {
     super(libp2pOptions)
 
-    this._gcInterval = gcInterval
+    this._gcDelay = options.gcDelay || 3e5
+    this._gcInterval = options.gcInterval || 7.2e6
+    this._minTtl = options.minTtl || MIN_TTL
+    this._maxTtl = options.maxTtl || MAX_TTL
+    this._maxNsLength = options.maxNsLength || MAX_NS_LENGTH
+    this._maxDiscoveryLimit = options.maxDiscoverLimit || MAX_DISCOVER_LIMIT
 
     /**
      * Registrations per namespace.
+     *
      * @type {Map<string, Map<string, NamespaceRegistration>>}
      */
     this.nsRegistrations = new Map()
 
     /**
      * Registration ids per cookie.
+     *
      * @type {Map<string, Set<string>>}
      */
     this.cookieRegistrations = new Map()
@@ -57,6 +78,7 @@ class RendezvousServer extends Libp2p {
 
   /**
    * Start rendezvous server for handling rendezvous streams and gc.
+   *
    * @returns {void}
    */
   start () {
@@ -69,36 +91,40 @@ class RendezvousServer extends Libp2p {
     log('starting')
 
     // Garbage collection
-    this._interval = setInterval(this._gc, this._gcInterval)
+    this._timeout = setInterval(this._gc, this._gcDelay)
 
     // Incoming streams handling
-    this.registrar.handle(PROTOCOL_MULTICODEC, rpc(this))
+    this.handle(PROTOCOL_MULTICODEC, rpc(this))
 
     log('started')
   }
 
   /**
    * Stops rendezvous server gc and clears registrations
+   *
    * @returns {void}
    */
   stop () {
-    super.stop()
+    this.unhandle(PROTOCOL_MULTICODEC)
 
-    clearInterval(this._interval)
+    clearTimeout(this._timeout)
     this._interval = undefined
 
     this.nsRegistrations.clear()
     this.cookieRegistrations.clear()
 
+    super.stop()
     log('stopped')
   }
 
   /**
    * Garbage collector to removed outdated registrations.
+   *
    * @returns {void}
    */
   _gc () {
     log('gc starting')
+    // TODO: delete addressBook
 
     const now = Date.now()
     const removedIds = []
@@ -127,10 +153,17 @@ class RendezvousServer extends Libp2p {
         this.cookieRegistrations.delete(key)
       }
     }
+
+    if (!this._timeout) {
+      return
+    }
+
+    this._timeout = setInterval(this._gc, this._gcInterval)
   }
 
   /**
    * Add a peer registration to a namespace.
+   *
    * @param {string} ns
    * @param {PeerId} peerId
    * @param {Envelope} envelope
@@ -153,6 +186,7 @@ class RendezvousServer extends Libp2p {
 
   /**
    * Remove registration of a given namespace to a peer
+   *
    * @param {string} ns
    * @param {PeerId} peerId
    * @returns {void}
@@ -173,6 +207,7 @@ class RendezvousServer extends Libp2p {
 
   /**
    * Remove all registrations of a given peer
+   *
    * @param {PeerId} peerId
    * @returns {void}
    */
@@ -191,16 +226,28 @@ class RendezvousServer extends Libp2p {
 
   /**
    * Get registrations for a namespace
+   *
    * @param {string} ns
    * @param {object} [options]
    * @param {number} [options.limit]
    * @param {string} [options.cookie]
    * @returns {{ registrations: Array<Registration>, cookie: string }}
    */
-  getRegistrations (ns, { limit = MAX_LIMIT, cookie = String(Math.random() + Date.now()) } = {}) {
+  getRegistrations (ns, { limit = MAX_DISCOVER_LIMIT, cookie } = {}) {
     const nsEntry = this.nsRegistrations.get(ns) || new Map()
     const registrations = []
-    const cRegistrations = this.cookieRegistrations.get(cookie) || new Set()
+
+    // Get the cookie registration if provided, create a cookie otherwise
+    let cRegistrations = new Set()
+    if (cookie) {
+      cRegistrations = this.cookieRegistrations.get(cookie)
+    } else {
+      cookie = String(Math.random() + Date.now())
+    }
+
+    if (!cRegistrations) {
+      throw errCode(new Error('no registrations for the given cookie'), errCodes.INVALID_COOKIE)
+    }
 
     for (const [idStr, nsReg] of nsEntry.entries()) {
       if (nsReg.expiration <= Date.now()) {
