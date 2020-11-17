@@ -13,6 +13,8 @@ const multiaddr = require('multiaddr')
 const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')
 
+const RendezvousServer = require('../src/server')
+
 const Peers = require('./fixtures/peers')
 const { MULTIADDRS_WEBSOCKETS } = require('./fixtures/browser')
 const relayAddr = MULTIADDRS_WEBSOCKETS[0]
@@ -25,14 +27,18 @@ const defaultConfig = {
   }
 }
 
+module.exports.defaultLibp2pConfig = defaultConfig
+
 /**
  * Create Perr Id.
  * @param {Object} [properties]
- * @param {number} [properties.number] number of peers (default: 1).
+ * @param {number} [properties.number = 1] number of peers.
  * @return {Promise<Array<PeerId>>}
  */
-async function createPeerId ({ number = 1 }) {
-  const peerIds = await pTimes(number, (i) => PeerId.createFromJSON(Peers[i]))
+async function createPeerId ({ number = 1, fixture = true } = {}) {
+  const peerIds = await pTimes(number, (i) => fixture
+    ? PeerId.createFromJSON(Peers[i])
+    : PeerId.create())
 
   return peerIds
 }
@@ -42,9 +48,9 @@ module.exports.createPeerId = createPeerId
 /**
  * Create libp2p nodes.
  * @param {Object} [properties]
- * @param {Object} [properties.config]
- * @param {number} [properties.number] number of peers (default: 1).
- * @param {boolean} [properties.started] nodes should start (default: true)
+ * @param {Object} [properties.config = {}]
+ * @param {number} [properties.number = 1] number of peers
+ * @param {boolean} [properties.started = true] nodes should start
  * @return {Promise<Array<Libp2p>>}
  */
 async function createPeer ({ number = 1, started = true, config = {} } = {}) {
@@ -66,6 +72,33 @@ async function createPeer ({ number = 1, started = true, config = {} } = {}) {
 }
 
 module.exports.createPeer = createPeer
+
+/**
+ * Create rendezvous server.
+ * @param {Object} [properties]
+ * @param {Object} [properties.config = {}]
+ * @param {boolean} [properties.started = true] node should start
+ */
+async function createRendezvousServer ({ config = {}, started = true } = {}) {
+  const [peerId] = await createPeerId({ fixture: false })
+
+  const rendezvous = new RendezvousServer({
+    peerId: peerId,
+    addresses: {
+      listen: [`${relayAddr}/p2p-circuit`]
+    },
+    ...defaultConfig,
+    ...config
+  })
+
+  if (started) {
+    await rendezvous.start()
+  }
+
+  return rendezvous
+}
+
+module.exports.createRendezvousServer = createRendezvousServer
 
 async function connectPeers (peer, otherPeer) {
   // Connect to testing relay node

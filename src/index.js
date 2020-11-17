@@ -14,16 +14,10 @@ const toString = require('uint8arrays/to-string')
 
 const MulticodecTopology = require('libp2p-interfaces/src/topology/multicodec-topology')
 
-const Server = require('./server')
 const { codes: errCodes } = require('./errors')
 const { PROTOCOL_MULTICODEC } = require('./constants')
 const { Message } = require('./proto')
 const MESSAGE_TYPE = Message.MessageType
-
-const defaultServerOptions = {
-  enabled: true,
-  gcInterval: 3e5
-}
 
 /**
 * Rendezvous point contains the connection to a rendezvous server, as well as,
@@ -42,32 +36,16 @@ class Rendezvous {
    * @constructor
    * @param {object} params
    * @param {Libp2p} params.libp2p
-   * @param {object} [params.server]
-   * @param {boolean} [params.server.enabled = true]
-   * @param {number} [params.server.gcInterval = 3e5]
    */
-  constructor ({ libp2p, server = {} }) {
+  constructor ({ libp2p }) {
     this._libp2p = libp2p
     this._peerId = libp2p.peerId
     this._registrar = libp2p.registrar
-
-    this._serverOptions = {
-      ...defaultServerOptions,
-      ...server
-    }
 
     /**
      * @type {Map<string, RendezvousPoint>}
      */
     this._rendezvousPoints = new Map()
-
-    /**
-    * Client cookies per namespace for own server
-    * @type {Map<string, string>}
-    */
-    this._cookiesSelf = new Map()
-
-    this._server = undefined
 
     this._registrarId = undefined
     this._onPeerConnected = this._onPeerConnected.bind(this)
@@ -85,12 +63,6 @@ class Rendezvous {
 
     log('starting')
 
-    // Create and start Rendezvous server if enabled
-    if (this._serverOptions.enabled) {
-      this._server = new Server(this._libp2p, this._serverOptions)
-      this._server.start()
-    }
-
     // register protocol with topology
     const topology = new MulticodecTopology({
       multicodecs: PROTOCOL_MULTICODEC,
@@ -105,7 +77,7 @@ class Rendezvous {
   }
 
   /**
-   * Unregister the rendezvous protocol and the streams with other peers will be closed.
+   * Unregister the rendezvous protocol and clear the state.
    * @returns {void}
    */
   stop () {
@@ -115,17 +87,11 @@ class Rendezvous {
 
     log('stopping')
 
-    clearInterval(this._interval)
-
     // unregister protocol and handlers
     this._registrar.unregister(this._registrarId)
-    if (this._serverOptions.enabled) {
-      this._server.stop()
-    }
 
     this._registrarId = undefined
     this._rendezvousPoints.clear()
-    this._cookiesSelf.clear()
 
     log('stopped')
   }
@@ -153,10 +119,6 @@ class Rendezvous {
     log('disconnected', idB58Str)
 
     this._rendezvousPoints.delete(idB58Str)
-
-    if (this._server) {
-      this._server.removePeerRegistrations(peerId)
-    }
   }
 
   /**
@@ -271,7 +233,7 @@ class Rendezvous {
    * Discover peers registered under a given namespace
    * @param {string} ns
    * @param {number} [limit]
-   * @returns {AsyncIterable<{ signedPeerRecord: Buffer, ns: string, ttl: number }>}
+   * @returns {AsyncIterable<{ signedPeerRecord: Uint8Array, ns: string, ttl: number }>}
    */
   async * discover (ns, limit) {
     // Are there available rendezvous servers?
@@ -284,24 +246,6 @@ class Rendezvous {
       ns: r.ns,
       ttl: r.ttl * 1e3 // convert to ms
     })
-
-    // Local search if Server enabled
-    if (this._server) {
-      const cookieSelf = this._cookiesSelf.get(ns)
-      const { cookie: cookieS, registrations: localRegistrations } = this._server.getRegistrations(ns, { limit, cookie: cookieSelf })
-
-      for (const r of localRegistrations) {
-        yield registrationTransformer(r)
-
-        limit--
-        if (limit === 0) {
-          return
-        }
-      }
-
-      // Store cookie self
-      this._cookiesSelf.set(ns, cookieS)
-    }
 
     // Iterate over all rendezvous points
     for (const [id, rp] of this._rendezvousPoints.entries()) {

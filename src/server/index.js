@@ -4,6 +4,7 @@ const debug = require('debug')
 const log = debug('libp2p:rendezvous-server')
 log.error = debug('libp2p:rendezvous-server:error')
 
+const Libp2p = require('libp2p')
 const PeerId = require('peer-id')
 
 const { PROTOCOL_MULTICODEC, MAX_LIMIT } = require('../constants')
@@ -27,16 +28,16 @@ const rpc = require('./rpc')
 /**
  * Libp2p rendezvous server.
  */
-class RendezvousServer {
+class RendezvousServer extends Libp2p {
   /**
      * @constructor
-     * @param {Libp2p} libp2p
+     * @param {Libp2pOptions} libp2pOptions
      * @param {object} [options]
      * @param {number} [options.gcInterval = 3e5]
      */
-  constructor (libp2p, { gcInterval = 3e5 } = {}) {
-    this._registrar = libp2p.registrar
-    this._peerStore = libp2p.peerStore
+  constructor (libp2pOptions, { gcInterval = 3e5 } = {}) {
+    super(libp2pOptions)
+
     this._gcInterval = gcInterval
 
     /**
@@ -59,6 +60,8 @@ class RendezvousServer {
    * @returns {void}
    */
   start () {
+    super.start()
+
     if (this._interval) {
       return
     }
@@ -69,7 +72,7 @@ class RendezvousServer {
     this._interval = setInterval(this._gc, this._gcInterval)
 
     // Incoming streams handling
-    this._registrar.handle(PROTOCOL_MULTICODEC, rpc(this))
+    this.registrar.handle(PROTOCOL_MULTICODEC, rpc(this))
 
     log('started')
   }
@@ -79,6 +82,8 @@ class RendezvousServer {
    * @returns {void}
    */
   stop () {
+    super.stop()
+
     clearInterval(this._interval)
     this._interval = undefined
 
@@ -143,7 +148,7 @@ class RendezvousServer {
     this.nsRegistrations.set(ns, nsReg)
 
     // Store envelope in the AddressBook
-    this._peerStore.addressBook.consumePeerRecord(envelope)
+    this.peerStore.addressBook.consumePeerRecord(envelope)
   }
 
   /**
@@ -213,7 +218,7 @@ class RendezvousServer {
       cRegistrations.add(nsReg.id)
       registrations.push({
         ns,
-        signedPeerRecord: this._peerStore.addressBook.getRawEnvelope(PeerId.createFromB58String(idStr)),
+        signedPeerRecord: this.peerStore.addressBook.getRawEnvelope(PeerId.createFromB58String(idStr)),
         ttl: Date.now() - nsReg.expiration
       })
 
