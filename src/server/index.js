@@ -17,7 +17,7 @@ const {
   MAX_NS_LENGTH,
   MAX_DISCOVER_LIMIT,
   PROTOCOL_MULTICODEC
-} = require('../constants')
+} = require('./constants')
 
 /**
  * @typedef {Object} Register

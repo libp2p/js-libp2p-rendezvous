@@ -248,17 +248,13 @@ class Rendezvous {
    * Discover peers registered under a given namespace
    *
    * @param {string} ns
-   * @param {number} [limit]
+   * @param {number} [limit = MAX_DISCOVER_LIMIT]
    * @returns {AsyncIterable<{ signedPeerRecord: Uint8Array, ns: string, ttl: number }>}
    */
-  async * discover (ns, limit) {
+  async * discover (ns, limit = MAX_DISCOVER_LIMIT) {
     // Are there available rendezvous servers?
     if (!this._rendezvousPoints.size) {
       throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
-    }
-
-    if (limit > MAX_DISCOVER_LIMIT) {
-      throw errCode(new Error(`a smaller limit must be provided (smaller than ${MAX_DISCOVER_LIMIT})`), errCodes.INVALID_LIMIT)
     }
 
     const registrationTransformer = (r) => ({

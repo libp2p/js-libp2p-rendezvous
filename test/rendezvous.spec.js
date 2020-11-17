@@ -122,7 +122,7 @@ describe('rendezvous', () => {
     })
   })
 
-  describe('api', () => {
+  describe('api with one rendezvous server', () => {
     let rendezvousServer
     let clients
 
@@ -154,12 +154,6 @@ describe('rendezvous', () => {
       await expect(clients[0].rendezvous.register())
         .to.eventually.rejected()
         .and.have.property('code', errCodes.INVALID_NAMESPACE)
-    })
-
-    it.skip('register throws error if ttl is too small', async () => {
-      await expect(clients[0].rendezvous.register(namespace, { ttl: 10 }))
-        .to.eventually.rejected()
-        .and.have.property('code', errCodes.INVALID_TTL)
     })
 
     it('register throws error if no connected rendezvous servers', async () => {

@@ -4,6 +4,9 @@
   "description": "Javascript implementation of the rendezvous protocol for libp2p",
   "leadMaintainer": "Vasco Santos <santos.vasco10@gmail.com>",
   "main": "src/index.js",
+  "bin": {
+    "libp2p-rendezvous-server": "src/server/bin.js"
+  },
   "files": [
     "dist",
     "src"
