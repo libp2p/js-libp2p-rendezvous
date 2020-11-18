@@ -6,6 +6,7 @@ chai.use(require('dirty-chai'))
 chai.use(require('chai-as-promised'))
 const { expect } = chai
 const sinon = require('sinon')
+
 const pWaitFor = require('p-wait-for')
 
 const multiaddr = require('multiaddr')
@@ -15,9 +16,13 @@ const PeerRecord = require('libp2p/src/record/peer-record')
 const Rendezvous = require('../src')
 const { codes: errCodes } = require('../src/errors')
 
+const { Message } = require('../src/proto')
+const RESPONSE_STATUS = Message.ResponseStatus
+
 const {
   createPeer,
   createRendezvousServer,
+  createSignedPeerRecord,
   connectPeers
 } = require('./utils')
 const { MULTIADDRS_WEBSOCKETS } = require('./fixtures/browser')
@@ -142,6 +147,7 @@ describe('rendezvous', () => {
     })
 
     afterEach(async () => {
+      sinon.restore()
       await rendezvousServer.stop()
 
       for (const peer of clients) {
@@ -165,12 +171,53 @@ describe('rendezvous', () => {
     it('register to a connected rendezvous server node', async () => {
       await connectPeers(clients[0], rendezvousServer)
 
-      // Register
       expect(rendezvousServer.nsRegistrations.size).to.eql(0)
       await clients[0].rendezvous.register(namespace)
 
       expect(rendezvousServer.nsRegistrations.size).to.eql(1)
       expect(rendezvousServer.nsRegistrations.get(namespace)).to.exist()
+    })
+
+    it('register throws an error with an invalid namespace', async () => {
+      const badNamespace = 'x'.repeat(300)
+      await connectPeers(clients[0], rendezvousServer)
+
+      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+
+      await expect(clients[0].rendezvous.register(badNamespace))
+        .to.eventually.rejected()
+        .and.have.property('code', RESPONSE_STATUS.E_INVALID_NAMESPACE)
+
+      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+    })
+
+    it('register throws an error with an invalid ttl', async () => {
+      const badTtl = 5e10
+      await connectPeers(clients[0], rendezvousServer)
+
+      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+
+      await expect(clients[0].rendezvous.register(namespace, { ttl: badTtl }))
+        .to.eventually.rejected()
+        .and.have.property('code', RESPONSE_STATUS.E_INVALID_TTL)
+
+      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+    })
+
+    it('register throws an error with an invalid peerId', async () => {
+      const badSignedPeerRecord = await createSignedPeerRecord(clients[1].peerId, [multiaddr('/ip4/127.0.0.1/tcp/100')])
+      await connectPeers(clients[0], rendezvousServer)
+
+      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+
+      const stub = sinon.stub(clients[0].peerStore.addressBook, 'getRawEnvelope')
+      stub.onCall(0).returns(badSignedPeerRecord.marshal())
+
+      await expect(clients[0].rendezvous.register(namespace))
+        .to.eventually.rejected()
+        .and.have.property('code', RESPONSE_STATUS.E_NOT_AUTHORIZED)
+
+      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
     })
 
     it('unregister throws if a namespace is not provided', async () => {
@@ -179,7 +226,7 @@ describe('rendezvous', () => {
         .and.have.property('code', errCodes.INVALID_NAMESPACE)
     })
 
-    it('register throws error if no connected rendezvous servers', async () => {
+    it('unregister throws error if no connected rendezvous servers', async () => {
       await expect(clients[0].rendezvous.unregister(namespace))
         .to.eventually.rejected()
         .and.have.property('code', errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
@@ -213,6 +260,20 @@ describe('rendezvous', () => {
       } catch (err) {
         expect(err).to.exist()
         expect(err.code).to.eql(errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
+        return
+      }
+      throw new Error('discover should throw error if a namespace is not provided')
+    })
+
+    it('discover throws error if a namespace is invalid', async () => {
+      const badNamespace = 'x'.repeat(300)
+
+      await connectPeers(clients[0], rendezvousServer)
+      try {
+        for await (const _ of clients[0].rendezvous.discover(badNamespace)) { } // eslint-disable-line
+      } catch (err) {
+        expect(err).to.exist()
+        expect(err.code).to.eql(RESPONSE_STATUS.E_INVALID_NAMESPACE)
         return
       }
       throw new Error('discover should throw error if a namespace is not provided')

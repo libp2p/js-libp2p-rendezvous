@@ -33,7 +33,7 @@ module.exports = (rendezvousPoint) => {
       const namespace = msg.register.ns
 
       // Validate namespace
-      if (!namespace || namespace > rendezvousPoint._maxNsLength) {
+      if (!namespace || namespace.length > rendezvousPoint._maxNsLength) {
         log.error(`invalid namespace received: ${namespace}`)
 
         return {
