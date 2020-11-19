@@ -59,6 +59,21 @@ module.exports = (rendezvousPoint) => {
         }
       }
 
+      // Now check how many registrations we have for this peer
+      // simple limit to defend against trivial DoS attacks
+      // example: a peer connects and keeps registering until it fills our memory
+      const peerRegistrations = rendezvousPoint.getRegistrationsFromPeer(peerId)
+      if (peerRegistrations.length >= rendezvousPoint._maxRegistrations) {
+        log.error('unauthorized peer to register, too many registrations')
+
+        return {
+          type: MESSAGE_TYPE.REGISTER_RESPONSE,
+          registerResponse: {
+            status: RESPONSE_STATUS.E_NOT_AUTHORIZED
+          }
+        }
+      }
+
       log(`register ${peerId.toB58String()}: trying register on ${namespace} by ${ttl} ms`)
 
       // Open and verify envelope signature

@@ -16,6 +16,7 @@ const {
   MAX_TTL,
   MAX_NS_LENGTH,
   MAX_DISCOVER_LIMIT,
+  MAX_REGISTRATIONS,
   PROTOCOL_MULTICODEC
 } = require('./constants')
 
@@ -26,7 +27,7 @@ const {
  * @property {number} ttl
  *
  * @typedef {Object} NamespaceRegistration
- * @property {string} id
+ * @property {string} id random generated id to map cookies
  * @property {number} expiration
  */
 
@@ -37,7 +38,8 @@ const {
  * @property {number} [minTtl = MIN_TTL] minimum acceptable ttl to store a registration
  * @property {number} [maxTtl = MAX_TTL] maxium acceptable ttl to store a registration
  * @property {number} [maxNsLength = MAX_NS_LENGTH] maxium acceptable namespace length
- * @property {number} [maxDiscoverLimit = MAX_DISCOVER_LIMIT] maxium acceptable discover limit
+ * @property {number} [maxDiscoveryLimit = MAX_DISCOVER_LIMIT] maxium acceptable discover limit
+ * @property {number} [maxRegistrations = MAX_REGISTRATIONS] maxium acceptable registrations per peer
  */
 
 /**
@@ -57,10 +59,11 @@ class RendezvousServer extends Libp2p {
     this._minTtl = options.minTtl || MIN_TTL
     this._maxTtl = options.maxTtl || MAX_TTL
     this._maxNsLength = options.maxNsLength || MAX_NS_LENGTH
-    this._maxDiscoveryLimit = options.maxDiscoverLimit || MAX_DISCOVER_LIMIT
+    this._maxDiscoveryLimit = options.maxDiscoveryLimit || MAX_DISCOVER_LIMIT
+    this._maxRegistrations = options.maxRegistrations || MAX_REGISTRATIONS
 
     /**
-     * Registrations per namespace.
+     * Registrations per namespace, where a registration maps peer id strings to a namespace reg.
      *
      * @type {Map<string, Map<string, NamespaceRegistration>>}
      */
@@ -282,6 +285,24 @@ class RendezvousServer extends Libp2p {
       registrations,
       cookie
     }
+  }
+
+  /**
+   * Get all the namespaces a given peer has registrations.
+   *
+   * @param {PeerId} peerId
+   * @returns {Array<string>}
+   */
+  getRegistrationsFromPeer (peerId) {
+    const namespaces = []
+
+    this.nsRegistrations.forEach((nsEntry, namespace) => {
+      if (nsEntry.has(peerId.toB58String())) {
+        namespaces.push(namespace)
+      }
+    })
+
+    return namespaces
   }
 }
 
