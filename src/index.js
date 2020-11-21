@@ -12,7 +12,7 @@ const { toBuffer } = require('it-buffer')
 const fromString = require('uint8arrays/from-string')
 const toString = require('uint8arrays/to-string')
 
-const MulticodecTopology = require('libp2p-interfaces/src/topology/multicodec-topology')
+const PeerId = require('peer-id')
 
 const { codes: errCodes } = require('./errors')
 const {
@@ -27,11 +27,9 @@ const MESSAGE_TYPE = Message.MessageType
  */
 
 /**
- * Rendezvous point contains the connection to a rendezvous server, as well as,
- * the cookies per namespace that the client received.
+ * Rendezvous point contains the cookies per namespace that the client received.
  *
  * @typedef {Object} RendezvousPoint
- * @property {Connection} connection
  * @property {Map<string, string>} cookies
  */
 
@@ -44,21 +42,24 @@ class Rendezvous {
    * Libp2p Rendezvous. A lightweight mechanism for generalized peer discovery.
    *
    * @class
-   * @param {RendezvousProperties} params
+   * @param {RendezvousProperties & RendezvousOptions} params
    */
-  constructor ({ libp2p }) {
+  constructor ({ libp2p, maxRendezvousPoints }) {
     this._libp2p = libp2p
     this._peerId = libp2p.peerId
-    this._registrar = libp2p.registrar
+    this._peerStore = libp2p.peerStore
+    this._connectionManager = libp2p.connectionManager
+
+    this._maxRendezvousPoints = maxRendezvousPoints
+
+    this._isStarted = false
 
     /**
      * @type {Map<string, RendezvousPoint>}
      */
     this._rendezvousPoints = new Map()
 
-    this._registrarId = undefined
-    this._onPeerConnected = this._onPeerConnected.bind(this)
-    this._onPeerDisconnected = this._onPeerDisconnected.bind(this)
+    this._onProtocolChange = this._onProtocolChange.bind(this)
   }
 
   /**
@@ -67,71 +68,63 @@ class Rendezvous {
    * @returns {void}
    */
   start () {
-    if (this._registrarId) {
+    if (this._isStarted) {
       return
     }
 
     log('starting')
 
-    // register protocol with topology
-    const topology = new MulticodecTopology({
-      multicodecs: PROTOCOL_MULTICODEC,
-      handlers: {
-        onConnect: this._onPeerConnected,
-        onDisconnect: this._onPeerDisconnected
-      }
-    })
-    this._registrarId = this._registrar.register(topology)
+    this._peerStore.on('change:protocols', this._onProtocolChange)
+    this._isStarted = true
 
     log('started')
   }
 
   /**
-   * Unregister the rendezvous protocol and clear the state.
+   * Clear the rendezvous state and remove listeners.
    *
    * @returns {void}
    */
   stop () {
-    if (!this._registrarId) {
+    if (!this._isStarted) {
       return
     }
 
     log('stopping')
 
-    // unregister protocol and handlers
-    this._registrar.unregister(this._registrarId)
-
-    this._registrarId = undefined
+    this._peerStore.removeListener('change:protocols', this._onProtocolChange)
     this._rendezvousPoints.clear()
 
+    this._isStarted = false
     log('stopped')
   }
 
   /**
-   * Registrar notifies a connection successfully with rendezvous protocol.
+   * Check if a peer supports the rendezvous protocol.
+   * If the protocol is not supported, check if it was supported before and remove it as a rendezvous point.
+   * If the protocol is supported, add it to the known rendezvous points.
    *
-   * @private
-   * @param {PeerId} peerId - remote peer-id
-   * @param {Connection} conn - connection to the peer
+   * @param {Object} props
+   * @param {PeerId} props.peerId
+   * @param {Array<string>} props.protocols
+   * @returns {void}
    */
-  _onPeerConnected (peerId, conn) {
-    const idB58Str = peerId.toB58String()
-    log('connected', idB58Str)
+  _onProtocolChange ({ peerId, protocols }) {
+    const id = peerId.toB58String()
 
-    this._rendezvousPoints.set(idB58Str, { connection: conn })
-  }
+    // Check if it has the protocol
+    const hasProtocol = protocols.find(protocol => protocol === PROTOCOL_MULTICODEC)
+    const hasRendezvousPoint = this._rendezvousPoints.has(id)
 
-  /**
-   * Registrar notifies a closing connection with rendezvous protocol.
-   *
-   * @private
-   * @param {PeerId} peerId - peerId
-   */
-  _onPeerDisconnected (peerId) {
-    const idB58Str = peerId.toB58String()
-    log('disconnected', idB58Str)
+    // If no protocol, check if we were keeping the peer before
+    if (!hasProtocol && hasRendezvousPoint) {
+      this._rendezvousPoints.delete(id)
+      log(`removed ${id} from rendezvous points as it does not suport ${PROTOCOL_MULTICODEC} anymore`)
+    } else if (hasProtocol && !this._rendezvousPoints.has(id)) {
+      this._rendezvousPoints.set(id, { cookies: new Map() })
+    }
 
-    this._rendezvousPoints.delete(idB58Str)
+    // TODO: Hint that connection can be discarded?
   }
 
   /**
@@ -152,6 +145,10 @@ class Rendezvous {
       throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
     }
 
+    // TODO: we should protect from getting to many rendezvous points and sending to all
+    // Should we have a custom max number of servers and a custom sorter function?
+    // Default to peers already connected
+
     const message = Message.encode({
       type: MESSAGE_TYPE.REGISTER,
       register: {
@@ -163,7 +160,7 @@ class Rendezvous {
 
     const registerTasks = []
     const taskFn = async (id) => {
-      const { connection } = this._rendezvousPoints.get(id)
+      const connection = await this._libp2p.dial(PeerId.createFromCID(id))
       const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
 
       const [response] = await pipe(
@@ -174,6 +171,10 @@ class Rendezvous {
         toBuffer,
         collect
       )
+
+      if (!connection.streams.length) {
+        await connection.close()
+      }
 
       const recMessage = Message.decode(response)
 
@@ -193,6 +194,7 @@ class Rendezvous {
     }
 
     // Return first ttl
+    // pAny here?
     const [returnTtl] = await Promise.all(registerTasks)
 
     return returnTtl
@@ -224,7 +226,7 @@ class Rendezvous {
 
     const unregisterTasks = []
     const taskFn = async (id) => {
-      const { connection } = this._rendezvousPoints.get(id)
+      const connection = await this._libp2p.dial(PeerId.createFromCID(id))
       const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
 
       await pipe(
@@ -235,6 +237,10 @@ class Rendezvous {
           for await (const _ of source) { } // eslint-disable-line
         }
       )
+
+      if (!connection.streams.length) {
+        await connection.close()
+      }
     }
 
     for (const id of this._rendezvousPoints.keys()) {
@@ -279,7 +285,8 @@ class Rendezvous {
       })
 
       // Send discover message and wait for response
-      const { stream } = await rp.connection.newStream(PROTOCOL_MULTICODEC)
+      const connection = await this._libp2p.dial(PeerId.createFromCID(id))
+      const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
       const [response] = await pipe(
         [message],
         lp.encode(),
@@ -288,6 +295,10 @@ class Rendezvous {
         toBuffer,
         collect
       )
+
+      if (!connection.streams.length) {
+        await connection.close()
+      }
 
       const recMessage = Message.decode(response)
 
@@ -305,7 +316,6 @@ class Rendezvous {
         // Store cookie
         rpCookies.set(ns, toString(recMessage.discoverResponse.cookie))
         this._rendezvousPoints.set(id, {
-          connection: rp.connection,
           cookies: rpCookies
         })
 

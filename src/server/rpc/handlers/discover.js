@@ -12,7 +12,7 @@ const { Message } = require('../../../proto')
 const MESSAGE_TYPE = Message.MessageType
 const RESPONSE_STATUS = Message.ResponseStatus
 
-const { codes: errCodes } = require('../../../errors')
+const { codes: errCodes } = require('../../errors')
 
 /**
  * @typedef {import('peer-id')} PeerId

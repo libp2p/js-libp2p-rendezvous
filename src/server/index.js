@@ -9,7 +9,7 @@ const errCode = require('err-code')
 const Libp2p = require('libp2p')
 const PeerId = require('peer-id')
 
-const { codes: errCodes } = require('../errors')
+const { codes: errCodes } = require('./errors')
 const rpc = require('./rpc')
 const {
   MIN_TTL,
