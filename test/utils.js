@@ -6,7 +6,6 @@ const { NOISE: Crypto } = require('libp2p-noise')
 const PeerId = require('peer-id')
 
 const pTimes = require('p-times')
-const pWaitFor = require('p-wait-for')
 
 const Libp2p = require('libp2p')
 const multiaddr = require('multiaddr')
@@ -14,6 +13,7 @@ const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')
 
 const RendezvousServer = require('../src/server')
+const Datastore = require('../src/server/datastores/memory')
 
 const Peers = require('./fixtures/peers')
 const { MULTIADDRS_WEBSOCKETS } = require('./fixtures/browser')
@@ -86,6 +86,7 @@ module.exports.createPeer = createPeer
 async function createRendezvousServer ({ config = {}, started = true } = {}) {
   const [peerId] = await createPeerId({ fixture: false })
 
+  const datastore = new Datastore()
   const rendezvous = new RendezvousServer({
     peerId: peerId,
     addresses: {
@@ -93,7 +94,7 @@ async function createRendezvousServer ({ config = {}, started = true } = {}) {
     },
     ...defaultConfig,
     ...config
-  })
+  }, { datastore })
 
   if (started) {
     await rendezvous.start()
@@ -103,21 +104,6 @@ async function createRendezvousServer ({ config = {}, started = true } = {}) {
 }
 
 module.exports.createRendezvousServer = createRendezvousServer
-
-async function connectPeers (peer, otherPeer) {
-  // Connect to testing relay node
-  await peer.dial(relayAddr)
-  await otherPeer.dial(relayAddr)
-
-  // Connect each other via relay node
-  const m = multiaddr(`${relayAddr}/p2p-circuit/p2p/${otherPeer.peerId.toB58String()}`)
-  await peer.dial(m)
-
-  // Wait event propagation
-  await pWaitFor(() => peer.rendezvous._rendezvousPoints.size === 1)
-}
-
-module.exports.connectPeers = connectPeers
 
 async function createSignedPeerRecord (peerId, multiaddrs) {
   const pr = new PeerRecord({

@@ -1,12 +1,9 @@
 'use strict'
 /* eslint-env mocha */
 
-const chai = require('chai')
-chai.use(require('dirty-chai'))
-chai.use(require('chai-as-promised'))
-const { expect } = chai
+const { expect } = require('aegir/utils/chai')
 
-const pipe = require('it-pipe')
+const { pipe } = require('it-pipe')
 const lp = require('it-length-prefixed')
 const { collect } = require('streaming-iterables')
 const { toBuffer } = require('it-buffer')
@@ -15,6 +12,7 @@ const multiaddr = require('multiaddr')
 const Libp2p = require('libp2p')
 
 const RendezvousServer = require('../src/server')
+const Datastore = require('../src/server/datastores/memory')
 const {
   PROTOCOL_MULTICODEC
 } = require('../src/server/constants')
@@ -34,6 +32,7 @@ describe('DoS attack protection', () => {
   const ns = 'test-ns'
   const ttl = 7.2e6 * 1e-3
 
+  let datastore
   let rServer
   let client
   let peerId
@@ -43,13 +42,14 @@ describe('DoS attack protection', () => {
   beforeEach(async () => {
     [peerId] = await createPeerId()
 
+    datastore = new Datastore()
     rServer = new RendezvousServer({
       peerId: peerId,
       addresses: {
         listen: [`${relayAddr}/p2p-circuit`]
       },
       ...defaultLibp2pConfig
-    }, { maxRegistrations: 1 }) // Maximum of one registration
+    }, { maxRegistrations: 1, datastore }) // Maximum of one registration
 
     multiaddrServer = multiaddr(`${relayAddr}/p2p-circuit/p2p/${peerId.toB58String()}`)
 
@@ -97,11 +97,12 @@ describe('DoS attack protection', () => {
       collect
     )
 
-    expect(rServer.nsRegistrations.size).to.eql(1)
-
     const recMessage = Message.decode(responses[1])
     expect(recMessage).to.exist()
     expect(recMessage.type).to.eql(MESSAGE_TYPE.REGISTER_RESPONSE)
     expect(recMessage.registerResponse.status).to.eql(RESPONSE_STATUS.E_NOT_AUTHORIZED)
+
+    // Only one record
+    expect(rServer.datastore.nsRegistrations.size).to.eql(1)
   })
 })

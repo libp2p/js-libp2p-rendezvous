@@ -44,10 +44,11 @@
   "dependencies": {
     "debug": "^4.2.0",
     "err-code": "^2.0.3",
+    "es6-promisify": "^6.1.1",
     "it-buffer": "^0.1.2",
     "it-length-prefixed": "^3.1.0",
     "it-pipe": "^1.1.0",
-    "libp2p": "libp2p/js-libp2p#0.30.x",
+    "libp2p": "libp2p/js-libp2p#chore/add-typedfs-with-post-install",
     "libp2p-mplex": "^0.10.0",
     "libp2p-noise": "^2.0.1",
     "libp2p-tcp": "^0.15.1",
@@ -55,13 +56,13 @@
     "menoetius": "0.0.2",
     "minimist": "^1.2.5",
     "multiaddr": "^8.0.0",
+    "mysql": "^2.18.1",
     "peer-id": "^0.14.1",
     "protons": "^2.0.0",
-    "streaming-iterables": "^5.0.2",
-    "uint8arrays": "^1.1.0"
+    "streaming-iterables": "^5.0.2"
   },
   "devDependencies": {
-    "aegir": "^28.2.0",
+    "aegir": "^29.2.2",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
     "delay": "^4.4.0",

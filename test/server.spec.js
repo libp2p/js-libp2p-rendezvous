@@ -1,11 +1,7 @@
 'use strict'
 /* eslint-env mocha */
 
-const chai = require('chai')
-chai.use(require('dirty-chai'))
-chai.use(require('chai-as-promised'))
-const { expect } = chai
-
+const { expect } = require('aegir/utils/chai')
 const delay = require('delay')
 
 const multiaddr = require('multiaddr')
@@ -13,7 +9,8 @@ const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')
 
 const RendezvousServer = require('../src/server')
-
+const Datastore = require('../src/server/datastores/memory')
+const { codes: errCodes } = require('../src/server/errors')
 const {
   createPeerId,
   createSignedPeerRecord,
@@ -27,6 +24,7 @@ describe('rendezvous server', () => {
   const signedPeerRecords = []
   let rServer
   let peerIds
+  let datastore
 
   before(async () => {
     peerIds = await createPeerId({ number: 4 })
@@ -34,11 +32,14 @@ describe('rendezvous server', () => {
     // Create a signed peer record per peer
     for (const peerId of peerIds) {
       const spr = await createSignedPeerRecord(peerId, multiaddrs)
-      signedPeerRecords.push(spr)
+      signedPeerRecords.push(spr.marshal())
     }
+
+    datastore = new Datastore()
   })
 
   afterEach(async () => {
+    datastore = new Datastore()
     rServer && await rServer.stop()
   })
 
@@ -46,133 +47,133 @@ describe('rendezvous server', () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     await rServer.start()
   })
 
-  it('can add registrations to multiple namespaces', () => {
+  it('can add registrations to multiple namespaces', async () => {
     const otherNamespace = 'other-namespace'
 
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
     // Add registration for peer 1 in a different namespace
-    rServer.addRegistration(otherNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(otherNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     // Add registration for peer 2 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
 
-    const { registrations: testNsRegistrations } = rServer.getRegistrations(testNamespace)
+    const { registrations: testNsRegistrations } = await rServer.getRegistrations(testNamespace)
     expect(testNsRegistrations).to.have.lengthOf(2)
 
-    const { registrations: otherNsRegistrations } = rServer.getRegistrations(otherNamespace)
+    const { registrations: otherNsRegistrations } = await rServer.getRegistrations(otherNamespace)
     expect(otherNsRegistrations).to.have.lengthOf(1)
   })
 
-  it('should be able to limit registrations to get', () => {
+  it('should be able to limit registrations to get', async () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
     // Add registration for peer 2 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
 
-    let r = rServer.getRegistrations(testNamespace, { limit: 1 })
+    let r = await rServer.getRegistrations(testNamespace, { limit: 1 })
     expect(r.registrations).to.have.lengthOf(1)
     expect(r.cookie).to.exist()
 
-    r = rServer.getRegistrations(testNamespace)
+    r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(2)
     expect(r.cookie).to.exist()
   })
 
-  it('can remove registrations from a peer in a given namespace', () => {
+  it('can remove registrations from a peer in a given namespace', async () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
     // Add registration for peer 2 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
 
-    let r = rServer.getRegistrations(testNamespace)
+    let r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(2)
     expect(r.cookie).to.exist()
 
     // Remove registration for peer0
-    rServer.removeRegistration(testNamespace, peerIds[1])
+    await rServer.removeRegistration(testNamespace, peerIds[1])
 
-    r = rServer.getRegistrations(testNamespace)
+    r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(1)
     expect(r.cookie).to.exist()
   })
 
-  it('can remove all registrations from a peer', () => {
+  it('can remove all registrations from a peer', async () => {
     const otherNamespace = 'other-namespace'
 
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
     // Add registration for peer 1 in a different namespace
-    rServer.addRegistration(otherNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(otherNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
-    let r = rServer.getRegistrations(testNamespace)
+    let r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(1)
 
-    let otherR = rServer.getRegistrations(otherNamespace)
+    let otherR = await rServer.getRegistrations(otherNamespace)
     expect(otherR.registrations).to.have.lengthOf(1)
 
     // Remove all registrations for peer0
-    rServer.removePeerRegistrations(peerIds[1])
+    await rServer.removePeerRegistrations(peerIds[1])
 
-    r = rServer.getRegistrations(testNamespace)
+    r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(0)
 
-    otherR = rServer.getRegistrations(otherNamespace)
+    otherR = await rServer.getRegistrations(otherNamespace)
     expect(otherR.registrations).to.have.lengthOf(0)
   })
 
-  it('can attempt to remove a registration for a non existent namespace', () => {
+  it('can attempt to remove a registration for a non existent namespace', async () => {
     const otherNamespace = 'other-namespace'
 
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
-    rServer.removeRegistration(otherNamespace, peerIds[1])
+    await rServer.removeRegistration(otherNamespace, peerIds[1])
   })
 
-  it('can attempt to remove a registration for a non existent peer', () => {
+  it('can attempt to remove a registration for a non existent peer', async () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
-    let r = rServer.getRegistrations(testNamespace)
+    let r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(1)
 
     // Remove registration for peer0
-    rServer.removeRegistration(testNamespace, peerIds[2])
+    await rServer.removeRegistration(testNamespace, peerIds[2])
 
-    r = rServer.getRegistrations(testNamespace)
+    r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(1)
   })
 
@@ -180,24 +181,24 @@ describe('rendezvous server', () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    }, { gcInterval: 300 })
+    }, { datastore, gcInterval: 300 })
 
     await rServer.start()
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 500)
-    rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 500)
+    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
 
-    let r = rServer.getRegistrations(testNamespace)
+    let r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(2)
 
     // wait for firt record to be removed
     await delay(650)
-    r = rServer.getRegistrations(testNamespace)
+    r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(1)
 
     await delay(400)
-    r = rServer.getRegistrations(testNamespace)
+    r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(0)
   })
 
@@ -205,13 +206,13 @@ describe('rendezvous server', () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     // Get current registrations
-    const { cookie, registrations } = rServer.getRegistrations(testNamespace)
+    const { cookie, registrations } = await rServer.getRegistrations(testNamespace)
     expect(cookie).to.exist()
     expect(registrations).to.exist()
     expect(registrations).to.have.lengthOf(1)
@@ -222,10 +223,10 @@ describe('rendezvous server', () => {
     expect(envelope.peerId.toString()).to.eql(peerIds[1].toString())
 
     // Add registration for peer 2 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
 
     // Get second registration by using the cookie
-    const { cookie: cookie2, registrations: registrations2 } = rServer.getRegistrations(testNamespace, { cookie })
+    const { cookie: cookie2, registrations: registrations2 } = await rServer.getRegistrations(testNamespace, { cookie })
     expect(cookie2).to.exist()
     expect(cookie2).to.eql(cookie)
     expect(registrations2).to.exist()
@@ -237,28 +238,28 @@ describe('rendezvous server', () => {
     expect(envelope2.peerId.toString()).to.eql(peerIds[2].toString())
 
     // If no cookie provided, all registrations are given
-    const { registrations: registrations3 } = rServer.getRegistrations(testNamespace)
+    const { registrations: registrations3 } = await rServer.getRegistrations(testNamespace)
     expect(registrations3).to.exist()
     expect(registrations3).to.have.lengthOf(2)
   })
 
-  it('no new peers should be returned if there are not new peers since latest query', () => {
+  it('no new peers should be returned if there are not new peers since latest query', async () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     // Get current registrations
-    const { cookie, registrations } = rServer.getRegistrations(testNamespace)
+    const { cookie, registrations } = await rServer.getRegistrations(testNamespace)
     expect(cookie).to.exist()
     expect(registrations).to.exist()
     expect(registrations).to.have.lengthOf(1)
 
     // Get registrations with same cookie and no new registration
-    const { cookie: cookie2, registrations: registrations2 } = rServer.getRegistrations(testNamespace, { cookie })
+    const { cookie: cookie2, registrations: registrations2 } = await rServer.getRegistrations(testNamespace, { cookie })
     expect(cookie2).to.exist()
     expect(cookie2).to.eql(cookie)
     expect(registrations2).to.exist()
@@ -269,13 +270,13 @@ describe('rendezvous server', () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     // Get current registrations
-    const { cookie, registrations } = rServer.getRegistrations(testNamespace)
+    const { cookie, registrations } = await rServer.getRegistrations(testNamespace)
     expect(cookie).to.exist()
     expect(registrations).to.exist()
     expect(registrations).to.have.lengthOf(1)
@@ -286,10 +287,10 @@ describe('rendezvous server', () => {
     expect(envelope.peerId.toString()).to.eql(peerIds[1].toString())
 
     // Add new registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
 
     // Get registrations with same cookie and no new registration
-    const { cookie: cookie2, registrations: registrations2 } = rServer.getRegistrations(testNamespace, { cookie })
+    const { cookie: cookie2, registrations: registrations2 } = await rServer.getRegistrations(testNamespace, { cookie })
     expect(cookie2).to.exist()
     expect(cookie2).to.eql(cookie)
     expect(registrations2).to.exist()
@@ -301,42 +302,40 @@ describe('rendezvous server', () => {
     expect(envelope2.peerId.toString()).to.eql(peerIds[1].toString())
   })
 
-  it('get registrations should throw if no stored cookie is provided', () => {
+  it('get registrations should throw if no stored cookie is provided', async () => {
     const badCookie = String(Math.random() + Date.now())
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    })
+    }, { datastore })
 
-    const fn = () => {
-      rServer.getRegistrations(testNamespace, { cookie: badCookie })
-    }
-
-    expect(fn).to.throw('no registrations for the given cookie')
+    await expect(rServer.getRegistrations(testNamespace, { cookie: badCookie }))
+      .to.eventually.be.rejectedWith(Error)
+      .and.to.have.property('code', errCodes.INVALID_COOKIE)
   })
 
   it('garbage collector should remove cookies of discarded records', async () => {
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    }, { gcDelay: 300, gcInterval: 300 })
+    }, { datastore, gcDelay: 300, gcInterval: 300 })
     await rServer.start()
 
     // Add registration for peer 1 in test namespace
-    rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 500)
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 500)
 
     // Get current registrations
-    const { cookie, registrations } = rServer.getRegistrations(testNamespace)
+    const { cookie, registrations } = await rServer.getRegistrations(testNamespace)
     expect(registrations).to.exist()
     expect(registrations).to.have.lengthOf(1)
 
     // Verify internal state
-    expect(rServer.nsRegistrations.get(testNamespace).size).to.eql(1)
-    expect(rServer.cookieRegistrations.get(cookie)).to.exist()
+    expect(rServer.datastore.nsRegistrations.get(testNamespace).size).to.eql(1)
+    expect(rServer.datastore.cookieRegistrations.get(cookie)).to.exist()
 
     await delay(800)
 
-    expect(rServer.nsRegistrations.get(testNamespace).size).to.eql(0)
-    expect(rServer.cookieRegistrations.get(cookie)).to.not.exist()
+    expect(rServer.datastore.nsRegistrations.get(testNamespace).size).to.eql(0)
+    expect(rServer.datastore.cookieRegistrations.get(cookie)).to.not.exist()
   })
 })

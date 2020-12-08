@@ -1,10 +1,7 @@
 'use strict'
 /* eslint-env mocha */
 
-const chai = require('chai')
-chai.use(require('dirty-chai'))
-chai.use(require('chai-as-promised'))
-const { expect } = chai
+const { expect } = require('aegir/utils/chai')
 const sinon = require('sinon')
 
 const pWaitFor = require('p-wait-for')
@@ -22,8 +19,7 @@ const RESPONSE_STATUS = Message.ResponseStatus
 const {
   createPeer,
   createRendezvousServer,
-  createSignedPeerRecord,
-  connectPeers
+  createSignedPeerRecord
 } = require('../utils')
 const { MULTIADDRS_WEBSOCKETS } = require('../fixtures/browser')
 const relayAddr = MULTIADDRS_WEBSOCKETS[0]
@@ -31,20 +27,69 @@ const relayAddr = MULTIADDRS_WEBSOCKETS[0]
 const namespace = 'ns'
 
 describe('rendezvous api', () => {
-  describe('one rendezvous server', () => {
-    let rendezvousServer
+  describe('no rendezvous server', () => {
     let clients
 
     // Create and start Libp2p nodes
     beforeEach(async () => {
-      // Create Rendezvous Server
-      rendezvousServer = await createRendezvousServer()
-
       clients = await createPeer({ number: 2 })
 
       // Create 2 rendezvous clients
       clients.forEach((peer) => {
         const rendezvous = new Rendezvous({ libp2p: peer })
+        rendezvous.start()
+        peer.rendezvous = rendezvous
+      })
+    })
+
+    afterEach(async () => {
+      sinon.restore()
+
+      for (const peer of clients) {
+        await peer.rendezvous.stop()
+        await peer.stop()
+      }
+    })
+
+    it('register throws error if no rendezvous servers', async () => {
+      await expect(clients[0].rendezvous.register(namespace))
+        .to.eventually.rejected()
+        .and.have.property('code', errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
+    })
+
+    it('unregister throws error if no rendezvous servers', async () => {
+      await expect(clients[0].rendezvous.unregister(namespace))
+        .to.eventually.rejected()
+        .and.have.property('code', errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
+    })
+
+    it('discover throws error if no rendezvous servers', async () => {
+      try {
+        for await (const _ of clients[0].rendezvous.discover()) { } // eslint-disable-line
+      } catch (err) {
+        expect(err).to.exist()
+        expect(err.code).to.eql(errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
+        return
+      }
+      throw new Error('discover should throw error if no rendezvous servers')
+    })
+  })
+
+  describe('one rendezvous server', () => {
+    let rendezvousServer
+    let clients
+
+    // Create and start Libp2p
+    beforeEach(async () => {
+      // Create Rendezvous Server
+      rendezvousServer = await createRendezvousServer()
+      await pWaitFor(() => rendezvousServer.multiaddrs.length > 0)
+      const rendezvousServerMultiaddr = `${rendezvousServer.multiaddrs[0]}/p2p/${rendezvousServer.peerId.toB58String()}`
+
+      // Create 2 rendezvous clients
+      clients = await createPeer({ number: 2 })
+      clients.forEach((peer) => {
+        const rendezvous = new Rendezvous({ libp2p: peer, rendezvousPoints: [rendezvousServerMultiaddr] })
         rendezvous.start()
         peer.rendezvous = rendezvous
       })
@@ -66,64 +111,28 @@ describe('rendezvous api', () => {
         .and.have.property('code', errCodes.INVALID_NAMESPACE)
     })
 
-    it('register throws error if no connected rendezvous servers', async () => {
-      await expect(clients[0].rendezvous.register(namespace))
-        .to.eventually.rejected()
-        .and.have.property('code', errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
-    })
-
-    it('register to a connected rendezvous server node', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
-      await clients[0].rendezvous.register(namespace)
-
-      expect(rendezvousServer.nsRegistrations.size).to.eql(1)
-      expect(rendezvousServer.nsRegistrations.get(namespace)).to.exist()
-    })
-
-    it('register opens and closes connection on register', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-
-      clients[0].hangUp(rendezvousServer.peerId)
-
-      const connsBeforeRegister = clients[0].connectionManager.size
-      await clients[0].rendezvous.register(namespace)
-
-      expect(clients[0].connectionManager.size).to.eql(connsBeforeRegister)
-    })
-
     it('register throws an error with an invalid namespace', async () => {
       const badNamespace = 'x'.repeat(300)
-      await connectPeers(clients[0], rendezvousServer)
-
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
 
       await expect(clients[0].rendezvous.register(badNamespace))
         .to.eventually.rejected()
         .and.have.property('code', RESPONSE_STATUS.E_INVALID_NAMESPACE)
 
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+      expect(rendezvousServer.datastore.nsRegistrations.size).to.eql(0)
     })
 
     it('register throws an error with an invalid ttl', async () => {
       const badTtl = 5e10
-      await connectPeers(clients[0], rendezvousServer)
-
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
 
       await expect(clients[0].rendezvous.register(namespace, { ttl: badTtl }))
         .to.eventually.rejected()
         .and.have.property('code', RESPONSE_STATUS.E_INVALID_TTL)
 
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+      expect(rendezvousServer.datastore.nsRegistrations.size).to.eql(0)
     })
 
     it('register throws an error with an invalid peerId', async () => {
       const badSignedPeerRecord = await createSignedPeerRecord(clients[1].peerId, [multiaddr('/ip4/127.0.0.1/tcp/100')])
-      await connectPeers(clients[0], rendezvousServer)
-
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
 
       const stub = sinon.stub(clients[0].peerStore.addressBook, 'getRawEnvelope')
       stub.onCall(0).returns(badSignedPeerRecord.marshal())
@@ -132,7 +141,15 @@ describe('rendezvous api', () => {
         .to.eventually.rejected()
         .and.have.property('code', RESPONSE_STATUS.E_NOT_AUTHORIZED)
 
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+      expect(rendezvousServer.datastore.nsRegistrations.size).to.eql(0)
+    })
+
+    it('registers with an available rendezvous server node', async () => {
+      expect(rendezvousServer.datastore.nsRegistrations.size).to.eql(0)
+      await clients[0].rendezvous.register(namespace)
+
+      expect(rendezvousServer.datastore.nsRegistrations.size).to.eql(1)
+      expect(rendezvousServer.datastore.nsRegistrations.get(namespace)).to.exist()
     })
 
     it('unregister throws if a namespace is not provided', async () => {
@@ -141,63 +158,26 @@ describe('rendezvous api', () => {
         .and.have.property('code', errCodes.INVALID_NAMESPACE)
     })
 
-    it('unregister throws error if no connected rendezvous servers', async () => {
-      await expect(clients[0].rendezvous.unregister(namespace))
-        .to.eventually.rejected()
-        .and.have.property('code', errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
-    })
-
-    it('unregister to a connected rendezvous server node', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-
+    it('unregisters with an available rendezvous server node', async () => {
       // Register
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+      expect(rendezvousServer.datastore.nsRegistrations.size).to.eql(0)
       await clients[0].rendezvous.register(namespace)
 
-      expect(rendezvousServer.nsRegistrations.size).to.eql(1)
-      expect(rendezvousServer.nsRegistrations.get(namespace)).to.exist()
+      expect(rendezvousServer.datastore.nsRegistrations.size).to.eql(1)
+      expect(rendezvousServer.datastore.nsRegistrations.get(namespace)).to.exist()
 
       // Unregister
       await clients[0].rendezvous.unregister(namespace)
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
+      expect(rendezvousServer.datastore.nsRegistrations.size).to.eql(0)
     })
 
-    it('unregister opens and closes connection on register', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-
-      // Register
-      await clients[0].rendezvous.register(namespace)
-      expect(rendezvousServer.nsRegistrations.size).to.eql(1)
-
-      const connsBeforeRegister = clients[0].connectionManager.size
+    it('unregister not fails if not registered', async () => {
       await clients[0].rendezvous.unregister(namespace)
-      expect(rendezvousServer.nsRegistrations.size).to.eql(0)
-
-      expect(clients[0].connectionManager.size).to.eql(connsBeforeRegister)
-    })
-
-    it('unregister to a connected rendezvous server node not fails if not registered', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-
-      // Unregister
-      await clients[0].rendezvous.unregister(namespace)
-    })
-
-    it('discover throws error if a namespace is not provided', async () => {
-      try {
-        for await (const _ of clients[0].rendezvous.discover()) { } // eslint-disable-line
-      } catch (err) {
-        expect(err).to.exist()
-        expect(err.code).to.eql(errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
-        return
-      }
-      throw new Error('discover should throw error if a namespace is not provided')
     })
 
     it('discover throws error if a namespace is invalid', async () => {
       const badNamespace = 'x'.repeat(300)
 
-      await connectPeers(clients[0], rendezvousServer)
       try {
         for await (const _ of clients[0].rendezvous.discover(badNamespace)) { } // eslint-disable-line
       } catch (err) {
@@ -209,17 +189,12 @@ describe('rendezvous api', () => {
     })
 
     it('discover does not find any register if there is none', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-
       for await (const reg of clients[0].rendezvous.discover(namespace)) { // eslint-disable-line
         throw new Error('no registers should exist')
       }
     })
 
     it('discover finds registered peer for namespace', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-      await connectPeers(clients[1], rendezvousServer)
-
       const registers = []
 
       // Peer2 does not discovery any peer registered
@@ -247,27 +222,7 @@ describe('rendezvous api', () => {
       expect(rec.multiaddrs).to.eql(clients[0].multiaddrs)
     })
 
-    it('discover opens and closes connection on register', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-      await connectPeers(clients[1], rendezvousServer)
-
-      // Register
-      await clients[0].rendezvous.register(namespace)
-      expect(rendezvousServer.nsRegistrations.size).to.eql(1)
-
-      // Hangup from one
-      clients[1].hangUp(rendezvousServer.peerId)
-      const connsBeforeRegister = clients[1].connectionManager.size
-
-      for await (const _ of clients[1].rendezvous.discover(namespace)) {}  // eslint-disable-line
-
-      expect(clients[1].connectionManager.size).to.eql(connsBeforeRegister)
-    })
-
     it('discover finds registered peer for namespace once (cookie usage)', async () => {
-      await connectPeers(clients[0], rendezvousServer)
-      await connectPeers(clients[1], rendezvousServer)
-
       const registers = []
 
       // Peer2 does not discovery any peer registered
@@ -300,15 +255,6 @@ describe('rendezvous api', () => {
     let rendezvousServers = []
     let clients
 
-    const connectPeers = async (peer, otherPeer) => {
-      // Connect each other via relay node
-      const m = multiaddr(`${relayAddr}/p2p-circuit/p2p/${otherPeer.peerId.toB58String()}`)
-      await peer.dial(m)
-
-      // Wait event propagation
-      await pWaitFor(() => peer.rendezvous._rendezvousPoints.size === rendezvousServers.length)
-    }
-
     // Create and start Libp2p nodes
     beforeEach(async () => {
       // Create Rendezvous Server
@@ -316,12 +262,13 @@ describe('rendezvous api', () => {
         createRendezvousServer(),
         createRendezvousServer()
       ])
-
-      clients = await createPeer({ number: 2 })
+      await pWaitFor(() => rendezvousServers[0].multiaddrs.length > 0 && rendezvousServers[1].multiaddrs.length > 0)
+      const rendezvousServerMultiaddrs = rendezvousServers.map((rendezvousServer) => `${rendezvousServer.multiaddrs[0]}/p2p/${rendezvousServer.peerId.toB58String()}`)
 
       // Create 2 rendezvous clients
+      clients = await createPeer({ number: 2 })
       clients.forEach((peer) => {
-        const rendezvous = new Rendezvous({ libp2p: peer })
+        const rendezvous = new Rendezvous({ libp2p: peer, rendezvousPoints: rendezvousServerMultiaddrs })
         rendezvous.start()
         peer.rendezvous = rendezvous
       })
@@ -340,10 +287,6 @@ describe('rendezvous api', () => {
     })
 
     it('discover find registered peer for namespace only when registered ', async () => {
-      // Connect all the clients to all the servers
-      await Promise.all(rendezvousServers.map((server) =>
-        Promise.all(clients.map((client) => connectPeers(client, server)))))
-
       const registers = []
 
       // Client 1 does not discovery any peer registered

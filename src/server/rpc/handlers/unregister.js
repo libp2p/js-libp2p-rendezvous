@@ -2,8 +2,9 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:rendezvous:protocol:unregister')
-log.error = debug('libp2p:rendezvous:protocol:unregister:error')
+const log = Object.assign(debug('libp2p:rendezvous-server:rpc:unregister'), {
+  error: debug('libp2p:rendezvous-server:rpc:unregister:err')
+})
 
 const equals = require('uint8arrays/equals')
 
@@ -21,8 +22,9 @@ module.exports = (rendezvousPoint) => {
    *
    * @param {PeerId} peerId
    * @param {Message} msg
+   * @returns {Promise<void>}
    */
-  return function unregister (peerId, msg) {
+  return async function unregister (peerId, msg) {
     try {
       log(`unregister ${peerId.toB58String()}: trying unregister from ${msg.unregister.ns}`)
 
@@ -39,9 +41,9 @@ module.exports = (rendezvousPoint) => {
 
       // Remove registration
       if (!msg.unregister.ns) {
-        rendezvousPoint.removePeerRegistrations(peerId)
+        await rendezvousPoint.removePeerRegistrations(peerId)
       } else {
-        rendezvousPoint.removeRegistration(msg.unregister.ns, peerId)
+        await rendezvousPoint.removeRegistration(msg.unregister.ns, peerId)
       }
     } catch (err) {
       log.error(err)

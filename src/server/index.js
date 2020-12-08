@@ -1,15 +1,13 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:rendezvous-server')
-log.error = debug('libp2p:rendezvous-server:error')
-
-const errCode = require('err-code')
+const log = Object.assign(debug('libp2p:rendezvous-server'), {
+  error: debug('libp2p:rendezvous-server:err')
+})
 
 const Libp2p = require('libp2p')
 const PeerId = require('peer-id')
 
-const { codes: errCodes } = require('./errors')
 const rpc = require('./rpc')
 const {
   MIN_TTL,
@@ -21,10 +19,8 @@ const {
 } = require('./constants')
 
 /**
- * @typedef {Object} Register
- * @property {string} ns
- * @property {Buffer} signedPeerRecord
- * @property {number} ttl
+ * @typedef {import('./datastores/interface').Datastore} Datastore
+ * @typedef {import('./datastores/interface').Registration} Registration
  *
  * @typedef {Object} NamespaceRegistration
  * @property {string} id random generated id to map cookies
@@ -33,6 +29,7 @@ const {
 
 /**
  * @typedef {Object} RendezvousServerOptions
+ * @property {Datastore} datastore
  * @property {number} [gcDelay = 3e5] garbage collector delay (default: 5 minutes)
  * @property {number} [gcInterval = 7.2e6] garbage collector interval (default: 2 hours)
  * @property {number} [minTtl = MIN_TTL] minimum acceptable ttl to store a registration
@@ -48,10 +45,10 @@ const {
 class RendezvousServer extends Libp2p {
   /**
    * @class
-   * @param {Libp2pOptions} libp2pOptions
-   * @param {RendezvousServerOptions} [options]
+   * @param {import('libp2p').Libp2pOptions} libp2pOptions
+   * @param {RendezvousServerOptions} options
    */
-  constructor (libp2pOptions, options = {}) {
+  constructor (libp2pOptions, options) {
     super(libp2pOptions)
 
     this._gcDelay = options.gcDelay || 3e5
@@ -62,6 +59,9 @@ class RendezvousServer extends Libp2p {
     this._maxDiscoveryLimit = options.maxDiscoveryLimit || MAX_DISCOVER_LIMIT
     this._maxRegistrations = options.maxRegistrations || MAX_REGISTRATIONS
 
+    this.datastore = options.datastore
+
+    // TODO: REMOVE!
     /**
      * Registrations per namespace, where a registration maps peer id strings to a namespace reg.
      *
@@ -82,19 +82,22 @@ class RendezvousServer extends Libp2p {
   /**
    * Start rendezvous server for handling rendezvous streams and gc.
    *
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  start () {
+  async start () {
     super.start()
 
-    if (this._interval) {
-      return
-    }
+    // if (this._interval) {
+    //   return
+    // }
 
     log('starting')
 
+    await this.datastore.start()
+
+    // TODO: + use module
     // Garbage collection
-    this._timeout = setInterval(this._gc, this._gcDelay)
+    // this._timeout = setInterval(this._gc, this._gcDelay)
 
     // Incoming streams handling
     this.handle(PROTOCOL_MULTICODEC, rpc(this))
@@ -105,19 +108,19 @@ class RendezvousServer extends Libp2p {
   /**
    * Stops rendezvous server gc and clears registrations
    *
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   stop () {
     this.unhandle(PROTOCOL_MULTICODEC)
 
-    clearTimeout(this._timeout)
-    this._interval = undefined
+    // clearTimeout(this._timeout)
 
-    this.nsRegistrations.clear()
-    this.cookieRegistrations.clear()
+    this.datastore.stop()
 
     super.stop()
     log('stopped')
+
+    return Promise.resolve()
   }
 
   /**
@@ -150,18 +153,18 @@ class RendezvousServer extends Libp2p {
       const filteredIds = Array.from(idSet).filter((id) => !removedIds.includes(id))
 
       if (filteredIds && filteredIds.length) {
-        this.cookieRegistrations.set(key, filteredIds)
+        this.cookieRegistrations.set(key, new Set(filteredIds))
       } else {
         // Empty
         this.cookieRegistrations.delete(key)
       }
     }
 
-    if (!this._timeout) {
-      return
-    }
+    // if (!this._timeout) {
+    //   return
+    // }
 
-    this._timeout = setInterval(this._gc, this._gcInterval)
+    // this._timeout = setInterval(this._gc, this._gcInterval)
   }
 
   /**
@@ -169,22 +172,13 @@ class RendezvousServer extends Libp2p {
    *
    * @param {string} ns
    * @param {PeerId} peerId
-   * @param {Envelope} envelope
+   * @param {Uint8Array} signedPeerRecord
    * @param {number} ttl
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  addRegistration (ns, peerId, envelope, ttl) {
-    const nsReg = this.nsRegistrations.get(ns) || new Map()
-
-    nsReg.set(peerId.toB58String(), {
-      id: String(Math.random() + Date.now()),
-      expiration: Date.now() + ttl
-    })
-
-    this.nsRegistrations.set(ns, nsReg)
-
-    // Store envelope in the AddressBook
-    this.peerStore.addressBook.consumePeerRecord(envelope)
+  async addRegistration (ns, peerId, signedPeerRecord, ttl) {
+    await this.datastore.addRegistration(ns, peerId, signedPeerRecord, ttl)
+    log(`added registration for the namespace ${ns} with peer ${peerId.toB58String()}`)
   }
 
   /**
@@ -192,39 +186,22 @@ class RendezvousServer extends Libp2p {
    *
    * @param {string} ns
    * @param {PeerId} peerId
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  removeRegistration (ns, peerId) {
-    const nsReg = this.nsRegistrations.get(ns)
-
-    if (nsReg) {
-      nsReg.delete(peerId.toB58String())
-
-      // Remove registrations map to namespace if empty
-      if (!nsReg.size) {
-        this.nsRegistrations.delete(ns)
-      }
-      log('removed existing registrations for the namespace - peer pair:', ns, peerId.toB58String())
-    }
+  async removeRegistration (ns, peerId) {
+    await this.datastore.removeRegistration(ns, peerId)
+    log(`removed existing registrations for the namespace ${ns} - peer ${peerId.toB58String()} pair`)
   }
 
   /**
    * Remove all registrations of a given peer
    *
    * @param {PeerId} peerId
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  removePeerRegistrations (peerId) {
-    for (const [ns, nsReg] of this.nsRegistrations.entries()) {
-      nsReg.delete(peerId.toB58String())
-
-      // Remove registrations map to namespace if empty
-      if (!nsReg.size) {
-        this.nsRegistrations.delete(ns)
-      }
-    }
-
-    log('removed existing registrations for peer', peerId.toB58String())
+  async removePeerRegistrations (peerId) {
+    await this.datastore.removePeerRegistrations(peerId)
+    log(`removed existing registrations for peer ${peerId.toB58String()}`)
   }
 
   /**
@@ -234,75 +211,20 @@ class RendezvousServer extends Libp2p {
    * @param {object} [options]
    * @param {number} [options.limit]
    * @param {string} [options.cookie]
-   * @returns {{ registrations: Array<Registration>, cookie: string }}
+   * @returns {Promise<{ registrations: Array<Registration>, cookie?: string }>}
    */
-  getRegistrations (ns, { limit = MAX_DISCOVER_LIMIT, cookie } = {}) {
-    const nsEntry = this.nsRegistrations.get(ns) || new Map()
-    const registrations = []
-
-    // Get the cookie registration if provided, create a cookie otherwise
-    let cRegistrations = new Set()
-    if (cookie) {
-      cRegistrations = this.cookieRegistrations.get(cookie)
-    } else {
-      cookie = String(Math.random() + Date.now())
-    }
-
-    if (!cRegistrations) {
-      throw errCode(new Error('no registrations for the given cookie'), errCodes.INVALID_COOKIE)
-    }
-
-    for (const [idStr, nsReg] of nsEntry.entries()) {
-      if (nsReg.expiration <= Date.now()) {
-        // Clean outdated registration from registrations and cookie record
-        nsEntry.delete(idStr)
-        cRegistrations.delete(nsReg.id)
-        continue
-      }
-
-      // If this record was already sent, continue
-      if (cRegistrations.has(nsReg.id)) {
-        continue
-      }
-
-      cRegistrations.add(nsReg.id)
-      registrations.push({
-        ns,
-        signedPeerRecord: this.peerStore.addressBook.getRawEnvelope(PeerId.createFromB58String(idStr)),
-        ttl: Date.now() - nsReg.expiration
-      })
-
-      // Stop if reached limit
-      if (registrations.length === limit) {
-        break
-      }
-    }
-
-    // Save cookie registrations
-    this.cookieRegistrations.set(cookie, cRegistrations)
-
-    return {
-      registrations,
-      cookie
-    }
+  async getRegistrations (ns, { limit = MAX_DISCOVER_LIMIT, cookie } = {}) {
+    return await this.datastore.getRegistrations(ns, { limit, cookie })
   }
 
   /**
-   * Get all the namespaces a given peer has registrations.
+   * Get number of registrations of a given peer.
    *
    * @param {PeerId} peerId
-   * @returns {Array<string>}
+   * @returns {Promise<number>}
    */
-  getRegistrationsFromPeer (peerId) {
-    const namespaces = []
-
-    this.nsRegistrations.forEach((nsEntry, namespace) => {
-      if (nsEntry.has(peerId.toB58String())) {
-        namespaces.push(namespace)
-      }
-    })
-
-    return namespaces
+  async getNumberOfRegistrationsFromPeer (peerId) {
+    return await this.datastore.getNumberOfRegistrationsFromPeer(peerId)
   }
 }
 

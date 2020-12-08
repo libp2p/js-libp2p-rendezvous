@@ -1,12 +1,9 @@
 'use strict'
 /* eslint-env mocha */
 
-const chai = require('chai')
-chai.use(require('dirty-chai'))
-chai.use(require('chai-as-promised'))
-const { expect } = chai
+const { expect } = require('aegir/utils/chai')
 
-const pipe = require('it-pipe')
+const { pipe } = require('it-pipe')
 const lp = require('it-length-prefixed')
 const { collect } = require('streaming-iterables')
 const { toBuffer } = require('it-buffer')
@@ -16,6 +13,7 @@ const PeerId = require('peer-id')
 const Libp2p = require('libp2p')
 
 const RendezvousServer = require('../src/server')
+const Datastore = require('../src/server/datastores/memory')
 const {
   PROTOCOL_MULTICODEC
 } = require('../src/server/constants')
@@ -35,6 +33,7 @@ describe('protocol', () => {
   const ns = 'test-ns'
   const ttl = 7.2e6 * 1e-3
 
+  let datastore
   let rServer
   let client
   let peerIds
@@ -46,13 +45,14 @@ describe('protocol', () => {
 
   // Create client and server and connect them
   beforeEach(async () => {
+    datastore = new Datastore()
     rServer = new RendezvousServer({
       peerId: peerIds[0],
       addresses: {
         listen: [`${relayAddr}/p2p-circuit`]
       },
       ...defaultLibp2pConfig
-    })
+    }, { datastore })
     multiaddrServer = multiaddr(`${relayAddr}/p2p-circuit/p2p/${peerIds[0].toB58String()}`)
 
     client = await Libp2p.create({
@@ -94,7 +94,7 @@ describe('protocol', () => {
     expect(recMessage.type).to.eql(MESSAGE_TYPE.REGISTER_RESPONSE)
     expect(recMessage.registerResponse.status).to.eql(Message.ResponseStatus.OK)
 
-    expect(rServer.nsRegistrations.size).to.eql(1)
+    expect(rServer.datastore.nsRegistrations.size).to.eql(1)
   })
 
   it('fails to register if invalid namespace', async () => {
@@ -122,7 +122,7 @@ describe('protocol', () => {
     expect(recMessage.type).to.eql(MESSAGE_TYPE.REGISTER_RESPONSE)
     expect(recMessage.registerResponse.status).to.eql(RESPONSE_STATUS.E_INVALID_NAMESPACE)
 
-    expect(rServer.nsRegistrations.size).to.eql(0)
+    expect(rServer.datastore.nsRegistrations.size).to.eql(0)
   })
 
   it('fails to register if invalid ttl', async () => {
@@ -150,7 +150,7 @@ describe('protocol', () => {
     expect(recMessage.type).to.eql(MESSAGE_TYPE.REGISTER_RESPONSE)
     expect(recMessage.registerResponse.status).to.eql(RESPONSE_STATUS.E_INVALID_TTL)
 
-    expect(rServer.nsRegistrations.size).to.eql(0)
+    expect(rServer.datastore.nsRegistrations.size).to.eql(0)
   })
 
   it('fails to register if invalid signed peer record', async () => {
@@ -200,11 +200,11 @@ describe('protocol', () => {
         }
       )
 
-      expect(rServer.nsRegistrations.size).to.eql(1)
+      expect(rServer.datastore.nsRegistrations.size).to.eql(1)
     })
 
     it('can unregister a namespace', async () => {
-      expect(rServer.nsRegistrations.size).to.eql(1)
+      expect(rServer.datastore.nsRegistrations.size).to.eql(1)
 
       const conn = await client.dial(multiaddrServer)
       const { stream } = await conn.newStream(PROTOCOL_MULTICODEC)
@@ -224,7 +224,7 @@ describe('protocol', () => {
         }
       )
 
-      expect(rServer.nsRegistrations.size).to.eql(0)
+      expect(rServer.datastore.nsRegistrations.size).to.eql(0)
     })
 
     it('can discover a peer registered into a namespace', async () => {

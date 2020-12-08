@@ -2,8 +2,9 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:rendezvous:protocol:discover')
-log.error = debug('libp2p:rendezvous:protocol:discover:error')
+const log = Object.assign(debug('libp2p:rendezvous-server:rpc:discover'), {
+  error: debug('libp2p:rendezvous-server:rpc:discover:err')
+})
 
 const fromString = require('uint8arrays/from-string')
 const toString = require('uint8arrays/to-string')
@@ -28,9 +29,9 @@ module.exports = (rendezvousPoint) => {
    *
    * @param {PeerId} peerId
    * @param {Message} msg
-   * @returns {Message}
+   * @returns {Promise<Message>}
    */
-  return function discover (peerId, msg) {
+  return async function discover (peerId, msg) {
     try {
       const namespace = msg.discover.ns
       log(`discover ${peerId.toB58String()}: discover on ${namespace}`)
@@ -58,7 +59,7 @@ module.exports = (rendezvousPoint) => {
         limit: msg.discover.limit
       }
 
-      const { registrations, cookie } = rendezvousPoint.getRegistrations(namespace, options)
+      const { registrations, cookie } = await rendezvousPoint.getRegistrations(namespace, options)
 
       return {
         type: MESSAGE_TYPE.DISCOVER_RESPONSE,

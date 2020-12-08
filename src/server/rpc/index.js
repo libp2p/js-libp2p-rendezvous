@@ -1,10 +1,11 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:rendezvous-point:rpc')
-log.error = debug('libp2p:rendezvous-point:rpc:error')
+const log = Object.assign(debug('libp2p:rendezvous-server:rpc'), {
+  error: debug('libp2p:rendezvous-server:rpc:err')
+})
 
-const pipe = require('it-pipe')
+const { pipe } = require('it-pipe')
 const lp = require('it-length-prefixed')
 const { toBuffer } = require('it-buffer')
 
@@ -17,9 +18,9 @@ module.exports = (rendezvous) => {
   /**
    * Process incoming Rendezvous messages.
    *
-   * @param {PeerId} peerId
+   * @param {import('peer-id')} peerId
    * @param {Message} msg
-   * @returns {Promise<Message>}
+   * @returns {Promise<Message> | undefined}
    */
   function handleMessage (peerId, msg) {
     const handler = getMessageHandler(msg.type)

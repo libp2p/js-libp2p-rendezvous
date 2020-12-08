@@ -2,8 +2,9 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:rendezvous:protocol:register')
-log.error = debug('libp2p:rendezvous:protocol:register:error')
+const log = Object.assign(debug('libp2p:rendezvous-server:rpc:register'), {
+  error: debug('libp2p:rendezvous-server:rpc:register:err')
+})
 
 const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')
@@ -62,8 +63,8 @@ module.exports = (rendezvousPoint) => {
       // Now check how many registrations we have for this peer
       // simple limit to defend against trivial DoS attacks
       // example: a peer connects and keeps registering until it fills our memory
-      const peerRegistrations = rendezvousPoint.getRegistrationsFromPeer(peerId)
-      if (peerRegistrations.length >= rendezvousPoint._maxRegistrations) {
+      const peerRegistrations = await rendezvousPoint.getNumberOfRegistrationsFromPeer(peerId)
+      if (peerRegistrations >= rendezvousPoint._maxRegistrations) {
         log.error('unauthorized peer to register, too many registrations')
 
         return {
@@ -92,10 +93,10 @@ module.exports = (rendezvousPoint) => {
       }
 
       // Add registration
-      rendezvousPoint.addRegistration(
+      await rendezvousPoint.addRegistration(
         namespace,
         peerId,
-        envelope,
+        msg.register.signedPeerRecord,
         ttl
       )
 

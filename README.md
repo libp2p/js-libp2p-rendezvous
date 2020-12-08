@@ -1,4 +1,4 @@
-# js-libp2p-rendezvous
+# js-libp2p-rendezvous <!-- omit in toc -->
 
 [![](https://img.shields.io/badge/made%20by-Protocol%20Labs-blue.svg?style=flat-square)](http://protocol.ai)
 [![](https://img.shields.io/badge/project-libp2p-yellow.svg?style=flat-square)](http://libp2p.io/)
@@ -7,15 +7,25 @@
 
 > Javascript implementation of the rendezvous protocol for libp2p
 
+## Lead Maintainer <!-- omit in toc -->
+
+[Vasco Santos](https://github.com/vasco-santos).
+
+## Table of Contents<!-- omit in toc -->
+
+- [Overview](#overview)
+- [Usage](#usage)
+  - [Install](#install)
+  - [CLI](#cli)
+  - [Docker Setup](#docker-setup)
+- [Contribute](#contribute)
+- [License](#license)
+
 ## Overview
 
 Libp2p rendezvous is a lightweight mechanism for generalized peer discovery. It can be used for bootstrap purposes, real time peer discovery, application specific routing, and so on. Any node implementing the rendezvous protocol can act as a rendezvous point, allowing the discovery of relevant peers in a decentralized fashion.
 
 See the [SPEC](https://github.com/libp2p/specs/tree/master/rendezvous) for more details.
-
-## Lead Maintainer
-
-[Vasco Santos](https://github.com/vasco-santos).
 
 ## Usage
 
@@ -27,10 +37,12 @@ See the [SPEC](https://github.com/libp2p/specs/tree/master/rendezvous) for more 
 
 Now you can use the cli command `libp2p-rendezvous-server` to spawn a libp2p rendezvous server.
 
-It accepts several arguments: `--peerId`, `--listenMultiaddrs`, `--announceMultiaddrs`, `--metricsMultiaddr` and `--disableMetrics`
+### CLI
+
+After installing the rendezvous server, you can use its binary. It accepts several arguments: `--peerId`, `--listenMultiaddrs`, `--announceMultiaddrs`, `--metricsPort` and `--disableMetrics`
 
 ```sh
-libp2p-rendezvous-server [--peerId <jsonFilePath>] [--listenMultiaddrs <ma> ... <ma>] [--announceMultiaddrs <ma> ... <ma>] [--metricsMultiaddr <ma>] [--disableMetrics]
+libp2p-rendezvous-server [--peerId <jsonFilePath>] [--listenMultiaddrs <ma> ... <ma>] [--announceMultiaddrs <ma> ... <ma>] [--metricsPort <port>] [--disableMetrics]
 ```
 
 For further customization (e.g. swapping the muxer, using other transports) it is recommended to create a server via the API.
@@ -55,10 +67,10 @@ By default it listens on `/ip4/127.0.0.1/tcp/15002/ws` and has no announce multi
 
 #### Metrics
 
-Metrics are enabled by default on `/ip4/127.0.0.1/tcp/8003` via Prometheus. This address can also be modified with:
+Metrics are enabled by default on `/ip4/127.0.0.1/tcp/8003` via Prometheus. This port can also be modified with:
 
 ```sh
-libp2p-rendezvous-server --metricsMultiaddr '/ip4/127.0.0.1/tcp/8000'
+libp2p-rendezvous-server --metricsPort '8008'
 ```
 
 Moreover, metrics can also be disabled with:
@@ -67,13 +79,13 @@ Moreover, metrics can also be disabled with:
 libp2p-rendezvous-server --disableMetrics
 ```
 
-## Docker Setup
+### Docker Setup
 
 TODO
 
 ## Contribute
 
-Feel free to join in. All welcome. Open an [issue](https://github.com/libp2p/js-libp2p-pubsub-peer-discovery/issues)!
+Feel free to join in. All welcome. Open an [issue](https://github.com/libp2p/js-libp2p-rendezvous/issues)!
 
 This repository falls under the IPFS [Code of Conduct](https://github.com/ipfs/community/blob/master/code-of-conduct.md).
 

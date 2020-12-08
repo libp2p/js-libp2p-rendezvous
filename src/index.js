@@ -1,18 +1,17 @@
 'use strict'
 
 const debug = require('debug')
-const log = debug('libp2p:rendezvous')
-log.error = debug('libp2p:rendezvous:error')
+const log = Object.assign(debug('libp2p:rendezvous'), {
+  error: debug('libp2p:rendezvous:err')
+})
 
 const errCode = require('err-code')
-const pipe = require('it-pipe')
+const { pipe } = require('it-pipe')
 const lp = require('it-length-prefixed')
 const { collect } = require('streaming-iterables')
 const { toBuffer } = require('it-buffer')
 const fromString = require('uint8arrays/from-string')
 const toString = require('uint8arrays/to-string')
-
-const PeerId = require('peer-id')
 
 const { codes: errCodes } = require('./errors')
 const {
@@ -24,19 +23,17 @@ const MESSAGE_TYPE = Message.MessageType
 
 /**
  * @typedef {import('libp2p')} Libp2p
- */
-
-/**
- * Rendezvous point contains the cookies per namespace that the client received.
- *
- * @typedef {Object} RendezvousPoint
- * @property {Map<string, string>} cookies
+ * @typedef {import('multiaddr')} Multiaddr
  */
 
 /**
  * @typedef {Object} RendezvousProperties
  * @property {Libp2p} libp2p
+ *
+ * @typedef {Object} RendezvousOptions
+ * @property {Multiaddr[]} rendezvousPoints
  */
+
 class Rendezvous {
   /**
    * Libp2p Rendezvous. A lightweight mechanism for generalized peer discovery.
@@ -44,22 +41,21 @@ class Rendezvous {
    * @class
    * @param {RendezvousProperties & RendezvousOptions} params
    */
-  constructor ({ libp2p, maxRendezvousPoints }) {
+  constructor ({ libp2p, rendezvousPoints }) {
     this._libp2p = libp2p
     this._peerId = libp2p.peerId
     this._peerStore = libp2p.peerStore
     this._connectionManager = libp2p.connectionManager
-
-    this._maxRendezvousPoints = maxRendezvousPoints
+    this._rendezvousPoints = rendezvousPoints
 
     this._isStarted = false
 
     /**
-     * @type {Map<string, RendezvousPoint>}
+     * Map namespaces to a map of rendezvous point identifier to cookie.
+     *
+     * @type {Map<string, Map<string, string>>}
      */
-    this._rendezvousPoints = new Map()
-
-    this._onProtocolChange = this._onProtocolChange.bind(this)
+    this._cookies = new Map()
   }
 
   /**
@@ -72,11 +68,7 @@ class Rendezvous {
       return
     }
 
-    log('starting')
-
-    this._peerStore.on('change:protocols', this._onProtocolChange)
     this._isStarted = true
-
     log('started')
   }
 
@@ -90,41 +82,9 @@ class Rendezvous {
       return
     }
 
-    log('stopping')
-
-    this._peerStore.removeListener('change:protocols', this._onProtocolChange)
-    this._rendezvousPoints.clear()
-
     this._isStarted = false
+    this._cookies.clear()
     log('stopped')
-  }
-
-  /**
-   * Check if a peer supports the rendezvous protocol.
-   * If the protocol is not supported, check if it was supported before and remove it as a rendezvous point.
-   * If the protocol is supported, add it to the known rendezvous points.
-   *
-   * @param {Object} props
-   * @param {PeerId} props.peerId
-   * @param {Array<string>} props.protocols
-   * @returns {void}
-   */
-  _onProtocolChange ({ peerId, protocols }) {
-    const id = peerId.toB58String()
-
-    // Check if it has the protocol
-    const hasProtocol = protocols.find(protocol => protocol === PROTOCOL_MULTICODEC)
-    const hasRendezvousPoint = this._rendezvousPoints.has(id)
-
-    // If no protocol, check if we were keeping the peer before
-    if (!hasProtocol && hasRendezvousPoint) {
-      this._rendezvousPoints.delete(id)
-      log(`removed ${id} from rendezvous points as it does not suport ${PROTOCOL_MULTICODEC} anymore`)
-    } else if (hasProtocol && !this._rendezvousPoints.has(id)) {
-      this._rendezvousPoints.set(id, { cookies: new Map() })
-    }
-
-    // TODO: Hint that connection can be discarded?
   }
 
   /**
@@ -141,13 +101,9 @@ class Rendezvous {
     }
 
     // Are there available rendezvous servers?
-    if (!this._rendezvousPoints.size) {
+    if (!this._rendezvousPoints || !this._rendezvousPoints.length) {
       throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
     }
-
-    // TODO: we should protect from getting to many rendezvous points and sending to all
-    // Should we have a custom max number of servers and a custom sorter function?
-    // Default to peers already connected
 
     const message = Message.encode({
       type: MESSAGE_TYPE.REGISTER,
@@ -159,8 +115,9 @@ class Rendezvous {
     })
 
     const registerTasks = []
-    const taskFn = async (id) => {
-      const connection = await this._libp2p.dial(PeerId.createFromCID(id))
+
+    const taskFn = async (/** @type {Multiaddr} **/ m) => {
+      const connection = await this._libp2p.dial(m)
       const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
 
       const [response] = await pipe(
@@ -172,6 +129,7 @@ class Rendezvous {
         collect
       )
 
+      // Close connection if not any other open streams
       if (!connection.streams.length) {
         await connection.close()
       }
@@ -189,12 +147,12 @@ class Rendezvous {
       return recMessage.registerResponse.ttl * 1e3 // convert to ms
     }
 
-    for (const id of this._rendezvousPoints.keys()) {
-      registerTasks.push(taskFn(id))
+    for (const m of this._rendezvousPoints) {
+      registerTasks.push(taskFn(m))
     }
 
     // Return first ttl
-    // pAny here?
+    // TODO: consider pAny
     const [returnTtl] = await Promise.all(registerTasks)
 
     return returnTtl
@@ -212,7 +170,7 @@ class Rendezvous {
     }
 
     // Are there available rendezvous servers?
-    if (!this._rendezvousPoints.size) {
+    if (!this._rendezvousPoints || !this._rendezvousPoints.length) {
       throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
     }
 
@@ -225,8 +183,8 @@ class Rendezvous {
     })
 
     const unregisterTasks = []
-    const taskFn = async (id) => {
-      const connection = await this._libp2p.dial(PeerId.createFromCID(id))
+    const taskFn = async (/** @type {Multiaddr} **/ m) => {
+      const connection = await this._libp2p.dial(m)
       const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
 
       await pipe(
@@ -238,13 +196,14 @@ class Rendezvous {
         }
       )
 
+      // Close connection if not any other open streams
       if (!connection.streams.length) {
         await connection.close()
       }
     }
 
-    for (const id of this._rendezvousPoints.keys()) {
-      unregisterTasks.push(taskFn(id))
+    for (const m of this._rendezvousPoints) {
+      unregisterTasks.push(taskFn(m))
     }
 
     await Promise.all(unregisterTasks)
@@ -259,7 +218,7 @@ class Rendezvous {
    */
   async * discover (ns, limit = MAX_DISCOVER_LIMIT) {
     // Are there available rendezvous servers?
-    if (!this._rendezvousPoints.size) {
+    if (!this._rendezvousPoints || !this._rendezvousPoints.length) {
       throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
     }
 
@@ -270,11 +229,11 @@ class Rendezvous {
     })
 
     // Iterate over all rendezvous points
-    for (const [id, rp] of this._rendezvousPoints.entries()) {
-      const rpCookies = rp.cookies || new Map()
+    for (const m of this._rendezvousPoints) {
+      const namespaseCookies = this._cookies.get(ns) || new Map()
 
       // Check if we have a cookie and encode discover message
-      const cookie = rpCookies.get(ns)
+      const cookie = namespaseCookies.get(m.toString())
       const message = Message.encode({
         type: MESSAGE_TYPE.DISCOVER,
         discover: {
@@ -285,7 +244,7 @@ class Rendezvous {
       })
 
       // Send discover message and wait for response
-      const connection = await this._libp2p.dial(PeerId.createFromCID(id))
+      const connection = await this._libp2p.dial(m)
       const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
       const [response] = await pipe(
         [message],
@@ -314,10 +273,9 @@ class Rendezvous {
         yield registrationTransformer(r)
 
         // Store cookie
-        rpCookies.set(ns, toString(recMessage.discoverResponse.cookie))
-        this._rendezvousPoints.set(id, {
-          cookies: rpCookies
-        })
+        const nsCookies = this._cookies.get(ns) || new Map()
+        nsCookies.set(m.toString(), toString(recMessage.discoverResponse.cookie))
+        this._cookies.set(ns, nsCookies)
 
         limit--
         if (limit === 0) {
