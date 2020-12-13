@@ -116,7 +116,11 @@ class Rendezvous {
 
     const registerTasks = []
 
-    const taskFn = async (/** @type {Multiaddr} **/ m) => {
+    /**
+     * @param {Multiaddr} m 
+     * @returns {Promise<number>}
+     */
+    const taskFn = async (m) => {
       const connection = await this._libp2p.dial(m)
       const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
 
@@ -183,7 +187,11 @@ class Rendezvous {
     })
 
     const unregisterTasks = []
-    const taskFn = async (/** @type {Multiaddr} **/ m) => {
+    /**
+     * @param {Multiaddr} m
+     * @returns {Promise<void>}
+     */
+    const taskFn = async (m) => {
       const connection = await this._libp2p.dial(m)
       const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
 
