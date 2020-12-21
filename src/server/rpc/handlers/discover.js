@@ -64,7 +64,7 @@ module.exports = (rendezvousPoint) => {
       return {
         type: MESSAGE_TYPE.DISCOVER_RESPONSE,
         discoverResponse: {
-          cookie: fromString(cookie),
+          cookie: cookie && fromString(cookie),
           registrations: registrations.map((r) => ({
             ns: r.ns,
             signedPeerRecord: r.signedPeerRecord,

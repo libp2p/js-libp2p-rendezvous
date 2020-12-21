@@ -59,7 +59,7 @@ class RendezvousServer extends Libp2p {
     this._maxDiscoveryLimit = options.maxDiscoveryLimit || MAX_DISCOVER_LIMIT
     this._maxRegistrations = options.maxRegistrations || MAX_REGISTRATIONS
 
-    this.datastore = options.datastore
+    this.rendezvousDatastore = options.datastore
 
     // TODO: REMOVE!
     /**
@@ -93,7 +93,7 @@ class RendezvousServer extends Libp2p {
 
     log('starting')
 
-    await this.datastore.start()
+    await this.rendezvousDatastore.start()
 
     // TODO: + use module
     // Garbage collection
@@ -115,7 +115,7 @@ class RendezvousServer extends Libp2p {
 
     // clearTimeout(this._timeout)
 
-    this.datastore.stop()
+    this.rendezvousDatastore.stop()
 
     super.stop()
     log('stopped')
@@ -177,7 +177,7 @@ class RendezvousServer extends Libp2p {
    * @returns {Promise<void>}
    */
   async addRegistration (ns, peerId, signedPeerRecord, ttl) {
-    await this.datastore.addRegistration(ns, peerId, signedPeerRecord, ttl)
+    await this.rendezvousDatastore.addRegistration(ns, peerId, signedPeerRecord, ttl)
     log(`added registration for the namespace ${ns} with peer ${peerId.toB58String()}`)
   }
 
@@ -189,7 +189,7 @@ class RendezvousServer extends Libp2p {
    * @returns {Promise<void>}
    */
   async removeRegistration (ns, peerId) {
-    await this.datastore.removeRegistration(ns, peerId)
+    await this.rendezvousDatastore.removeRegistration(ns, peerId)
     log(`removed existing registrations for the namespace ${ns} - peer ${peerId.toB58String()} pair`)
   }
 
@@ -200,7 +200,7 @@ class RendezvousServer extends Libp2p {
    * @returns {Promise<void>}
    */
   async removePeerRegistrations (peerId) {
-    await this.datastore.removePeerRegistrations(peerId)
+    await this.rendezvousDatastore.removePeerRegistrations(peerId)
     log(`removed existing registrations for peer ${peerId.toB58String()}`)
   }
 
@@ -214,7 +214,7 @@ class RendezvousServer extends Libp2p {
    * @returns {Promise<{ registrations: Array<Registration>, cookie?: string }>}
    */
   async getRegistrations (ns, { limit = MAX_DISCOVER_LIMIT, cookie } = {}) {
-    return await this.datastore.getRegistrations(ns, { limit, cookie })
+    return await this.rendezvousDatastore.getRegistrations(ns, { limit, cookie })
   }
 
   /**
@@ -224,7 +224,7 @@ class RendezvousServer extends Libp2p {
    * @returns {Promise<number>}
    */
   async getNumberOfRegistrationsFromPeer (peerId) {
-    return await this.datastore.getNumberOfRegistrationsFromPeer(peerId)
+    return await this.rendezvousDatastore.getNumberOfRegistrationsFromPeer(peerId)
   }
 }
 

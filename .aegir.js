@@ -8,7 +8,14 @@ const WebSockets = require('libp2p-websockets')
 const Muxer = require('libp2p-mplex')
 const { NOISE: Crypto } = require('libp2p-noise')
 
+const { isNode } = require('ipfs-utils/src/env')
+const delay = require('delay')
+const execa = require('execa')
+const pWaitFor = require('p-wait-for')
+const isCI = require('is-ci')
+
 let libp2p
+let containerId
 
 const before = async () => {
   // Use the last peer
@@ -36,10 +43,40 @@ const before = async () => {
   })
   
   await libp2p.start()
+
+  // CI runs datastore service
+  if (isCI || !isNode) {
+    return
+  }
+
+  const procResult = execa.commandSync('docker run -p 3306:3306 -e MYSQL_ROOT_PASSWORD=test-secret-pw -e MYSQL_DATABASE=libp2p_rendezvous_db -d mysql:8 --default-authentication-plugin=mysql_native_password', {
+    all: true
+  })
+  containerId = procResult.stdout
+
+  console.log(`wait for docker container ${containerId} to be ready`)
+
+  await pWaitFor(() => {
+    const procCheck = execa.commandSync(`docker logs ${containerId}`)
+    const logs = procCheck.stdout + procCheck.stderr // Docker/MySQL sends to the stderr the ready for connections...
+
+    return logs.includes('ready for connections')
+  }, {
+    interval: 5000
+  })
+  // Some more time waiting
+  await delay(10e3)
 }
 
 const after = async () => {
   await libp2p.stop()
+
+  if (isCI || !isNode) {
+    return
+  }
+
+  console.log('docker container is stopping')
+  execa.commandSync(`docker stop ${containerId}`)
 }
 
 module.exports = {

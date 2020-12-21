@@ -4,6 +4,9 @@ const debug = require('debug')
 const log = debug('libp2p:rendezvous-server:mysql')
 log.error = debug('libp2p:rendezvous-server:mysql:error')
 
+const errCode = require('err-code')
+const { codes: errCodes } = require('../errors')
+
 const mysql = require('mysql')
 
 /**
@@ -40,6 +43,13 @@ class Mysql {
       insecureAuth,
       multipleStatements
     }
+
+    /**
+     * Peer string identifier with current add operations.
+     *
+     * @type {Map<string, Set<string>>}
+     */
+    this._registeringPeer = new Map()
   }
 
   /**
@@ -60,8 +70,18 @@ class Mysql {
     this.conn.end()
   }
 
-  reset () {
-    return Promise.resolve()
+  async reset () {
+    await new Promise((resolve, reject) => {
+      this.conn.query(`
+        DROP TABLE IF EXISTS cookie;
+        DROP TABLE IF EXISTS registration;
+        `, (err) => {
+        if (err) {
+          return reject(err)
+        }
+        resolve()
+      })
+    })
   }
 
   /**
@@ -74,14 +94,27 @@ class Mysql {
    * @returns {Promise<void>}
    */
   addRegistration (namespace, peerId, signedPeerRecord, ttl) {
+    const id = peerId.toB58String()
+    const opId = String(Math.random() + Date.now())
+    const peerOps = this._registeringPeer.get(id) || new Set()
+
+    peerOps.add(opId)
+    this._registeringPeer.set(id, peerOps)
+
     return new Promise((resolve, reject) => {
       this.conn.query('INSERT INTO ?? SET ?',
         ['registration', {
           namespace,
-          peer_id: peerId,
+          peer_id: id,
           signed_peer_record: Buffer.from(signedPeerRecord),
           expiration: new Date(Date.now() + ttl)
         }], (err) => {
+          // Remove Operation
+          peerOps.delete(opId)
+          if (!peerOps.size) {
+            this._registeringPeer.delete(id)
+          }
+
           if (err) {
             return reject(err)
           }
@@ -101,23 +134,40 @@ class Mysql {
    * @returns {Promise<{ registrations: Array<Registration>, cookie?: string }>}
    */
   async getRegistrations (namespace, { limit = 10, cookie } = {}) {
-    // TODO: transaction
+    if (cookie) {
+      const cookieEntries = await new Promise((resolve, reject) => {
+        this.conn.query(
+          'SELECT * FROM cookie WHERE id = ? LIMIT 1',
+          [cookie],
+          (err, results) => {
+            if (err) {
+              return reject(err)
+            }
+            resolve(results)
+          }
+        )
+      })
+      if (!cookieEntries.length) {
+        throw errCode(new Error('no registrations for the given cookie'), errCodes.INVALID_COOKIE)
+      }
+    }
+
     const cookieWhereNotExists = () => {
       if (!cookie) return ''
       return ` AND NOT EXISTS (
         SELECT null
         FROM cookie c
-        WHERE r.id = c.reg_id AND c.namespace = r.namespace
+        WHERE r.id = c.reg_id AND c.namespace = r.namespace AND c.id = ?
       )`
     }
 
     const results = await new Promise((resolve, reject) => {
       this.conn.query(
-        `SELECT id, namespace, signed_peer_record, expiration FROM registration r
-        WHERE namespace = ? AND expiration >= NOW()${cookieWhereNotExists()}
+        `SELECT id, namespace, peer_id, signed_peer_record, expiration FROM registration r
+        WHERE namespace = ? AND expiration >= NOW() ${cookieWhereNotExists()}
         ORDER BY expiration DESC
         LIMIT ?`,
-        [namespace, limit],
+        [namespace, cookie || limit, limit],
         (err, results) => {
           if (err) {
             return reject(err)
@@ -139,8 +189,8 @@ class Mysql {
     // Store in cookies if results available
     await new Promise((resolve, reject) => {
       this.conn.query(
-        `INSERT INTO ?? (id, namespace, reg_id) VALUES ${results.map((entry) =>
-          `("${this.conn.escape(cookie)}", "${this.conn.escape(entry.namespace)}", "${this.conn.escape(entry.id)}")`
+        `INSERT INTO ?? (id, namespace, reg_id, peer_id) VALUES ${results.map((entry) =>
+          `(${this.conn.escape(cookie)}, ${this.conn.escape(entry.namespace)}, ${this.conn.escape(entry.id)}, ${this.conn.escape(entry.peer_id)})`
         )}`, ['cookie']
         , (err) => {
           if (err) {
@@ -177,10 +227,24 @@ class Mysql {
           if (err) {
             return reject(err)
           }
-          resolve(res[0]['COUNT(1)'])
+          // DoS attack defense check
+          const pendingReg = this._getNumberOfPendingRegistrationsFromPeer(peerId)
+          resolve(res[0]['COUNT(1)'] + pendingReg)
         }
       )
     })
+  }
+
+  /**
+   * Get number of ongoing registrations for a peer.
+   *
+   * @param {PeerId} peerId
+   * @returns {number}
+   */
+  _getNumberOfPendingRegistrationsFromPeer (peerId) {
+    const peerOps = this._registeringPeer.get(peerId.toB58String()) || new Set()
+
+    return peerOps.size
   }
 
   /**
@@ -194,14 +258,16 @@ class Mysql {
     const id = peerId.toB58String()
 
     return new Promise((resolve, reject) => {
-      this.conn.query('DELETE FROM registration WHERE peer_id = ? AND namespace = ?',
-        [id, ns],
-        (err) => {
-          if (err) {
-            return reject(err)
-          }
-          resolve()
-        })
+      this.conn.query(`
+        DELETE FROM cookie WHERE peer_id = ? AND namespace = ?;
+        DELETE FROM registration WHERE peer_id = ? AND namespace = ?
+      `, [id, ns, id, ns],
+      (err) => {
+        if (err) {
+          return reject(err)
+        }
+        resolve()
+      })
     })
   }
 
@@ -215,14 +281,16 @@ class Mysql {
     const id = peerId.toB58String()
 
     return new Promise((resolve, reject) => {
-      this.conn.query('DELETE FROM registration WHERE peer_id = ?',
-        [id],
-        (err) => {
-          if (err) {
-            return reject(err)
-          }
-          resolve()
-        })
+      this.conn.query(`
+        DELETE FROM cookie WHERE peer_id = ?;
+        DELETE FROM registration WHERE peer_id = ?
+      `, [id, id],
+      (err) => {
+        if (err) {
+          return reject(err)
+        }
+        resolve()
+      })
     })
   }
 
@@ -248,9 +316,9 @@ class Mysql {
           id varchar(21),
           namespace varchar(255),
           reg_id INT UNSIGNED,
+          peer_id varchar(255) NOT NULL,
           created_at datetime DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (id, namespace, reg_id),
-          FOREIGN KEY (reg_id) REFERENCES registration(id),
           INDEX (created_at)
         );
       `, (err) => {
@@ -259,6 +327,33 @@ class Mysql {
         }
         resolve()
       })
+      // this.conn.query(`
+      //   CREATE TABLE IF NOT EXISTS registration (
+      //     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      //     namespace varchar(255) NOT NULL,
+      //     peer_id varchar(255) NOT NULL,
+      //     signed_peer_record blob NOT NULL,
+      //     expiration timestamp NOT NULL,
+      //     PRIMARY KEY (id),
+      //     INDEX (namespace, expiration, peer_id)
+      //   );
+
+      //   CREATE TABLE IF NOT EXISTS cookie (
+      //     id varchar(21),
+      //     namespace varchar(255),
+      //     reg_id INT UNSIGNED,
+      //     peer_id varchar(255) NOT NULL,
+      //     created_at datetime DEFAULT CURRENT_TIMESTAMP,
+      //     PRIMARY KEY (id, namespace, reg_id),
+      //     FOREIGN KEY (reg_id) REFERENCES registration(id),
+      //     INDEX (created_at)
+      //   );
+      // `, (err) => {
+      //   if (err) {
+      //     return reject(err)
+      //   }
+      //   resolve()
+      // })
     })
   }
 }

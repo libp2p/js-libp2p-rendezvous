@@ -117,7 +117,7 @@ class Rendezvous {
     const registerTasks = []
 
     /**
-     * @param {Multiaddr} m 
+     * @param {Multiaddr} m
      * @returns {Promise<number>}
      */
     const taskFn = async (m) => {
@@ -280,15 +280,18 @@ class Rendezvous {
         // track registrations
         yield registrationTransformer(r)
 
-        // Store cookie
-        const nsCookies = this._cookies.get(ns) || new Map()
-        nsCookies.set(m.toString(), toString(recMessage.discoverResponse.cookie))
-        this._cookies.set(ns, nsCookies)
-
         limit--
         if (limit === 0) {
-          return
+          break
         }
+      }
+
+      // Store cookie
+      const c = recMessage.discoverResponse.cookie
+      if (c && c.length) {
+        const nsCookies = this._cookies.get(ns) || new Map()
+        nsCookies.set(m.toString(), toString(c))
+        this._cookies.set(ns, nsCookies)
       }
     }
   }

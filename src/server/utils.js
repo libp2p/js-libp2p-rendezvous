@@ -1,41 +1,52 @@
 'use strict'
 
-const multiaddr = require('multiaddr')
+function getExtraParams (alias1, alias2) {
+  const params = []
+
+  const flagIndex = process.argv.findIndex((e) => e === alias1 || e === alias2)
+  const tmpEndIndex = process.argv.slice(flagIndex + 1).findIndex((e) => e.startsWith('--'))
+  const endIndex = tmpEndIndex !== -1 ? tmpEndIndex : process.argv.length - flagIndex - 1
+
+  for (let i = flagIndex + 1; i < flagIndex + endIndex; i++) {
+    params.push(process.argv[i + 1])
+  }
+
+  return params
+}
 
 function getAnnounceAddresses (argv) {
-  const announceAddr = argv.announceMultiaddrs || argv.am
-  const announceAddresses = announceAddr ? [multiaddr(announceAddr).toString()] : []
+  let announceAddresses = []
+  const argvAddr = argv.announceMultiaddrs || argv.am
 
-  if (argv.announceMultiaddrs || argv.am) {
-    const flagIndex = process.argv.findIndex((e) => e === '--announceMultiaddrs' || e === '--am')
-    const tmpEndIndex = process.argv.slice(flagIndex + 1).findIndex((e) => e.startsWith('--'))
-    const endIndex = tmpEndIndex !== -1 ? tmpEndIndex : process.argv.length - flagIndex - 1
+  if (argvAddr) {
+    announceAddresses = [argvAddr]
 
-    for (let i = flagIndex + 1; i < flagIndex + endIndex; i++) {
-      announceAddresses.push(multiaddr(process.argv[i + 1]).toString())
-    }
+    const extraParams = getExtraParams('--announceMultiaddrs', '--am')
+    extraParams.forEach((p) => announceAddresses.push(p))
+  } else if (process.env.ANNOUNCE_MULTIADDRS) {
+    announceAddresses = process.env.ANNOUNCE_MULTIADDRS.split(',')
   }
 
   return announceAddresses
 }
 
-module.exports.getAnnounceAddresses = getAnnounceAddresses
-
 function getListenAddresses (argv) {
-  const listenAddr = argv.listenMultiaddrs || argv.lm || '/ip4/127.0.0.1/tcp/15002/ws'
-  const listenAddresses = [multiaddr(listenAddr).toString()]
+  let listenAddresses = ['/ip4/127.0.0.1/tcp/15003/ws', '/ip4/127.0.0.1/tcp/8000']
+  const argvAddr = argv.listenMultiaddrs || argv.lm
 
-  if (argv.listenMultiaddrs || argv.lm) {
-    const flagIndex = process.argv.findIndex((e) => e === '--listenMultiaddrs' || e === '--lm')
-    const tmpEndIndex = process.argv.slice(flagIndex + 1).findIndex((e) => e.startsWith('--'))
-    const endIndex = tmpEndIndex !== -1 ? tmpEndIndex : process.argv.length - flagIndex - 1
+  if (argvAddr) {
+    listenAddresses = [argvAddr]
 
-    for (let i = flagIndex + 1; i < flagIndex + endIndex; i++) {
-      listenAddresses.push(multiaddr(process.argv[i + 1]).toString())
-    }
+    const extraParams = getExtraParams('--listenMultiaddrs', '--lm')
+    extraParams.forEach((p) => listenAddresses.push(p))
+  } else if (process.env.LISTEN_MULTIADDRS) {
+    listenAddresses = process.env.LISTEN_MULTIADDRS.split(',')
   }
 
   return listenAddresses
 }
 
-module.exports.getListenAddresses = getListenAddresses
+module.exports = {
+  getAnnounceAddresses,
+  getListenAddresses
+}

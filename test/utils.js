@@ -6,6 +6,7 @@ const { NOISE: Crypto } = require('libp2p-noise')
 const PeerId = require('peer-id')
 
 const pTimes = require('p-times')
+const { isNode } = require('ipfs-utils/src/env')
 
 const Libp2p = require('libp2p')
 const multiaddr = require('multiaddr')
@@ -13,7 +14,6 @@ const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')
 
 const RendezvousServer = require('../src/server')
-const Datastore = require('../src/server/datastores/memory')
 
 const Peers = require('./fixtures/peers')
 const { MULTIADDRS_WEBSOCKETS } = require('./fixtures/browser')
@@ -86,7 +86,7 @@ module.exports.createPeer = createPeer
 async function createRendezvousServer ({ config = {}, started = true } = {}) {
   const [peerId] = await createPeerId({ fixture: false })
 
-  const datastore = new Datastore()
+  const datastore = createDatastore()
   const rendezvous = new RendezvousServer({
     peerId: peerId,
     addresses: {
@@ -117,3 +117,22 @@ async function createSignedPeerRecord (peerId, multiaddrs) {
 }
 
 module.exports.createSignedPeerRecord = createSignedPeerRecord
+
+function createDatastore () {
+  if (!isNode) {
+    const Memory = require('../src/server/datastores/memory')
+    return new Memory()
+  }
+
+  const MySql = require('../src/server/datastores/mysql')
+  const datastore = new MySql({
+    host: 'localhost',
+    user: 'root',
+    password: 'test-secret-pw',
+    database: 'libp2p_rendezvous_db'
+  })
+
+  return datastore
+}
+
+module.exports.createDatastore = createDatastore

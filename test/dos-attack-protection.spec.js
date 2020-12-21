@@ -12,7 +12,6 @@ const multiaddr = require('multiaddr')
 const Libp2p = require('libp2p')
 
 const RendezvousServer = require('../src/server')
-const Datastore = require('../src/server/datastores/memory')
 const {
   PROTOCOL_MULTICODEC
 } = require('../src/server/constants')
@@ -22,6 +21,7 @@ const RESPONSE_STATUS = Message.ResponseStatus
 
 const {
   createPeerId,
+  createDatastore,
   defaultLibp2pConfig
 } = require('./utils')
 
@@ -42,7 +42,7 @@ describe('DoS attack protection', () => {
   beforeEach(async () => {
     [peerId] = await createPeerId()
 
-    datastore = new Datastore()
+    datastore = createDatastore()
     rServer = new RendezvousServer({
       peerId: peerId,
       addresses: {
@@ -64,6 +64,7 @@ describe('DoS attack protection', () => {
   })
 
   afterEach(async () => {
+    await datastore.reset()
     await Promise.all([rServer, client].map((n) => n.stop()))
   })
 
@@ -103,6 +104,7 @@ describe('DoS attack protection', () => {
     expect(recMessage.registerResponse.status).to.eql(RESPONSE_STATUS.E_NOT_AUTHORIZED)
 
     // Only one record
-    expect(rServer.datastore.nsRegistrations.size).to.eql(1)
+    const { registrations } = await rServer.getRegistrations(ns)
+    expect(registrations).to.have.lengthOf(1)
   })
 })

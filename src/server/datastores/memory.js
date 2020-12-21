@@ -53,12 +53,11 @@ class Memory {
     return Promise.resolve()
   }
 
-  stop () {
-    this.nsRegistrations.clear()
-    this.cookieRegistrations.clear()
-  }
+  stop () {}
 
   reset () {
+    this.nsRegistrations.clear()
+    this.cookieRegistrations.clear()
     return Promise.resolve()
   }
 

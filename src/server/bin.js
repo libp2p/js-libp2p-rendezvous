@@ -22,7 +22,7 @@ const { NOISE: Crypto } = require('libp2p-noise')
 const PeerId = require('peer-id')
 
 const RendezvousServer = require('./index')
-const Datastore = require('./datastores/memory')
+const Datastore = require('./datastores/mysql')
 const { getAnnounceAddresses, getListenAddresses } = require('./utils')
 
 async function main () {
@@ -30,8 +30,6 @@ async function main () {
   let metricsServer
   const metrics = !(argv.disableMetrics || process.env.DISABLE_METRICS)
   const metricsPort = argv.metricsPort || argv.mp || process.env.METRICS_PORT || '8003'
-  // const metricsMa = multiaddr(argv.metricsMultiaddr || argv.ma || process.env.METRICSMA || '/ip4/127.0.0.1/tcp/8003')
-  // const metricsAddr = metricsMa.nodeAddress()
 
   // Multiaddrs
   const listenAddresses = getListenAddresses(argv)
@@ -48,8 +46,14 @@ async function main () {
     log('If you want to keep the same address for the server you should provide a peerId with --peerId <jsonFilePath>')
   }
 
+  const datastore = new Datastore({
+    host: 'localhost',
+    user: 'root',
+    password: 'test-secret-pw',
+    database: 'libp2p_rendezvous_db'
+  })
+
   // Create Rendezvous server
-  const datastore = new Datastore()
   const rendezvousServer = new RendezvousServer({
     modules: {
       transport: [Websockets, TCP],
