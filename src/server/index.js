@@ -4,6 +4,10 @@ const debug = require('debug')
 const log = Object.assign(debug('libp2p:rendezvous-server'), {
   error: debug('libp2p:rendezvous-server:err')
 })
+const {
+  setDelayedInterval,
+  clearDelayedInterval
+} = require('set-delayed-interval')
 
 const Libp2p = require('libp2p')
 const PeerId = require('peer-id')
@@ -14,7 +18,12 @@ const {
   MAX_TTL,
   MAX_NS_LENGTH,
   MAX_DISCOVER_LIMIT,
-  MAX_REGISTRATIONS,
+  MAX_PEER_REGISTRATIONS,
+  GC_BOOT_DELAY,
+  GC_INTERVAL,
+  GC_MIN_INTERVAL,
+  GC_MIN_REGISTRATIONS,
+  GC_MAX_REGISTRATIONS,
   PROTOCOL_MULTICODEC
 } = require('./constants')
 
@@ -36,7 +45,12 @@ const {
  * @property {number} [maxTtl = MAX_TTL] maxium acceptable ttl to store a registration
  * @property {number} [maxNsLength = MAX_NS_LENGTH] maxium acceptable namespace length
  * @property {number} [maxDiscoveryLimit = MAX_DISCOVER_LIMIT] maxium acceptable discover limit
- * @property {number} [maxRegistrations = MAX_REGISTRATIONS] maxium acceptable registrations per peer
+ * @property {number} [maxPeerRegistrations = MAX_PEER_REGISTRATIONS] maxium acceptable registrations per peer
+ * @property {number} [gcBootDelay = GC_BOOT_DELAY] delay before starting garbage collector job
+ * @property {number} [gcMinInterval = GC_MIN_INTERVAL] minimum interval between each garbage collector job, in case maximum threshold reached
+ * @property {number} [gcInterval = GC_INTERVAL] interval between each garbage collector job
+ * @property {number} [gcMinRegistrations = GC_MIN_REGISTRATIONS] minimum number of registration for triggering garbage collector
+ * @property {number} [gcMaxRegistrations = GC_MAX_REGISTRATIONS] maximum number of registration for triggering garbage collector
  */
 
 /**
@@ -57,26 +71,18 @@ class RendezvousServer extends Libp2p {
     this._maxTtl = options.maxTtl || MAX_TTL
     this._maxNsLength = options.maxNsLength || MAX_NS_LENGTH
     this._maxDiscoveryLimit = options.maxDiscoveryLimit || MAX_DISCOVER_LIMIT
-    this._maxRegistrations = options.maxRegistrations || MAX_REGISTRATIONS
+    this._maxPeerRegistrations = options.maxPeerRegistrations || MAX_PEER_REGISTRATIONS
 
     this.rendezvousDatastore = options.datastore
 
-    // TODO: REMOVE!
-    /**
-     * Registrations per namespace, where a registration maps peer id strings to a namespace reg.
-     *
-     * @type {Map<string, Map<string, NamespaceRegistration>>}
-     */
-    this.nsRegistrations = new Map()
-
-    /**
-     * Registration ids per cookie.
-     *
-     * @type {Map<string, Set<string>>}
-     */
-    this.cookieRegistrations = new Map()
-
-    this._gc = this._gc.bind(this)
+    this._registrationsCount = 0
+    this._lastGcTs = 0
+    this._gcDelay = options.gcBootDelay || GC_BOOT_DELAY
+    this._gcInterval = options.gcInterval || GC_INTERVAL
+    this._gcMinInterval = options.gcMinInterval || GC_MIN_INTERVAL
+    this._gcMinRegistrations = options.gcMinRegistrations || GC_MIN_REGISTRATIONS
+    this._gcMaxRegistrations = options.gcMaxRegistrations || GC_MAX_REGISTRATIONS
+    this._gcJob = this._gcJob.bind(this)
   }
 
   /**
@@ -87,20 +93,27 @@ class RendezvousServer extends Libp2p {
   async start () {
     super.start()
 
-    // if (this._interval) {
-    //   return
-    // }
+    if (this._timeout) {
+      return
+    }
 
     log('starting')
 
     await this.rendezvousDatastore.start()
 
-    // TODO: + use module
     // Garbage collection
-    // this._timeout = setInterval(this._gc, this._gcDelay)
+    this._timeout = setDelayedInterval(
+      this._gcJob, this._gcInterval, this._gcDelay
+    )
 
     // Incoming streams handling
     this.handle(PROTOCOL_MULTICODEC, rpc(this))
+
+    // Remove peer records from memory as they are not needed
+    // TODO: This should be handled by PeerStore itself in the future
+    this.peerStore.on('peer', (peerId) => {
+      this.peerStore.delete(peerId)
+    })
 
     log('started')
   }
@@ -112,8 +125,7 @@ class RendezvousServer extends Libp2p {
    */
   stop () {
     this.unhandle(PROTOCOL_MULTICODEC)
-
-    // clearTimeout(this._timeout)
+    clearDelayedInterval(this._timeout)
 
     this.rendezvousDatastore.stop()
 
@@ -124,47 +136,29 @@ class RendezvousServer extends Libp2p {
   }
 
   /**
-   * Garbage collector to removed outdated registrations.
+   * Call garbage collector if enough registrations.
    *
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  _gc () {
-    log('gc starting')
-    // TODO: delete addressBook
-
-    const now = Date.now()
-    const removedIds = []
-
-    // Iterate namespaces
-    this.nsRegistrations.forEach((nsEntry) => {
-      // Iterate registrations for namespaces
-      nsEntry.forEach((nsReg, idStr) => {
-        if (now >= nsReg.expiration) {
-          nsEntry.delete(idStr)
-          removedIds.push(nsReg.id)
-
-          log(`gc removed namespace entry for ${idStr}`)
-        }
-      })
-    })
-
-    // Remove outdated records references from cookies
-    for (const [key, idSet] of this.cookieRegistrations.entries()) {
-      const filteredIds = Array.from(idSet).filter((id) => !removedIds.includes(id))
-
-      if (filteredIds && filteredIds.length) {
-        this.cookieRegistrations.set(key, new Set(filteredIds))
-      } else {
-        // Empty
-        this.cookieRegistrations.delete(key)
-      }
+  async _gcJob () {
+    if (this._registrationsCount > this._gcMinRegistrations && Date.now() > this._gcMinInterval + this._lastGcTs) {
+      await this._gc()
     }
+  }
 
-    // if (!this._timeout) {
-    //   return
-    // }
+  /**
+   * Run datastore garbage collector.
+   *
+   * @returns {Promise<void>}
+   */
+  async _gc () {
+    log('gc starting')
 
-    // this._timeout = setInterval(this._gc, this._gcInterval)
+    const count = await this.rendezvousDatastore.gc()
+    this._registrationsCount -= count
+    this._lastGcTs = Date.now()
+
+    log('gc finished')
   }
 
   /**
@@ -179,6 +173,13 @@ class RendezvousServer extends Libp2p {
   async addRegistration (ns, peerId, signedPeerRecord, ttl) {
     await this.rendezvousDatastore.addRegistration(ns, peerId, signedPeerRecord, ttl)
     log(`added registration for the namespace ${ns} with peer ${peerId.toB58String()}`)
+
+    this._registrationsCount += 1
+    // Manually trigger garbage collector if max registrations threshold reached
+    // and the minGc interval is finished
+    if (this._registrationsCount >= this._gcMaxRegistrations && Date.now() > this._gcMinInterval + this._lastGcTs) {
+      this._gc()
+    }
   }
 
   /**
@@ -189,8 +190,10 @@ class RendezvousServer extends Libp2p {
    * @returns {Promise<void>}
    */
   async removeRegistration (ns, peerId) {
-    await this.rendezvousDatastore.removeRegistration(ns, peerId)
+    const count = await this.rendezvousDatastore.removeRegistration(ns, peerId)
     log(`removed existing registrations for the namespace ${ns} - peer ${peerId.toB58String()} pair`)
+
+    this._registrationsCount -= count
   }
 
   /**
@@ -200,8 +203,10 @@ class RendezvousServer extends Libp2p {
    * @returns {Promise<void>}
    */
   async removePeerRegistrations (peerId) {
-    await this.rendezvousDatastore.removePeerRegistrations(peerId)
+    const count = await this.rendezvousDatastore.removePeerRegistrations(peerId)
     log(`removed existing registrations for peer ${peerId.toB58String()}`)
+
+    this._registrationsCount -= count
   }
 
   /**

@@ -62,6 +62,43 @@ class Memory {
   }
 
   /**
+   * Run datastore garbage collector to remove expired records.
+   *
+   * @returns {Promise<number>}
+   */
+  gc () {
+    const now = Date.now()
+    const removedIds = []
+
+    // Iterate namespaces
+    this.nsRegistrations.forEach((nsEntry) => {
+      // Iterate registrations for namespaces
+      nsEntry.forEach((nsReg, idStr) => {
+        if (now >= nsReg.expiration) {
+          nsEntry.delete(idStr)
+          removedIds.push(nsReg.id)
+
+          log(`gc removed namespace entry for ${idStr}`)
+        }
+      })
+    })
+
+    // Remove outdated records references from cookies
+    for (const [key, idSet] of this.cookieRegistrations.entries()) {
+      const filteredIds = Array.from(idSet).filter((id) => !removedIds.includes(id))
+
+      if (filteredIds && filteredIds.length) {
+        this.cookieRegistrations.set(key, new Set(filteredIds))
+      } else {
+        // Empty
+        this.cookieRegistrations.delete(key)
+      }
+    }
+
+    return Promise.resolve(removedIds.length)
+  }
+
+  /**
    * Add an entry to the registration table.
    *
    * @param {string} ns
@@ -168,13 +205,14 @@ class Memory {
    *
    * @param {string} ns
    * @param {PeerId} peerId
-   * @returns {Promise<void>}
+   * @returns {Promise<number>}
    */
   removeRegistration (ns, peerId) {
+    let count = 0
     const nsReg = this.nsRegistrations.get(ns)
 
-    if (nsReg) {
-      nsReg.delete(peerId.toB58String())
+    if (nsReg && nsReg.delete(peerId.toB58String())) {
+      count += 1
 
       // Remove registrations map to namespace if empty
       if (!nsReg.size) {
@@ -183,27 +221,30 @@ class Memory {
       log('removed existing registrations for the namespace - peer pair:', ns, peerId.toB58String())
     }
 
-    return Promise.resolve()
+    return Promise.resolve(count)
   }
 
   /**
    * Remove all registrations of a given peer
    *
    * @param {PeerId} peerId
-   * @returns {Promise<void>}
+   * @returns {Promise<number>}
    */
   removePeerRegistrations (peerId) {
+    let count = 0
     for (const [ns, nsReg] of this.nsRegistrations.entries()) {
-      nsReg.delete(peerId.toB58String())
+      if (nsReg.delete(peerId.toB58String())) {
+        count += 1
 
-      // Remove registrations map to namespace if empty
-      if (!nsReg.size) {
-        this.nsRegistrations.delete(ns)
+        // Remove registrations map to namespace if empty
+        if (!nsReg.size) {
+          this.nsRegistrations.delete(ns)
+        }
       }
     }
 
     log('removed existing registrations for peer', peerId.toB58String())
-    return Promise.resolve()
+    return Promise.resolve(count)
   }
 }
 

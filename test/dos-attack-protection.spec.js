@@ -49,7 +49,7 @@ describe('DoS attack protection', () => {
         listen: [`${relayAddr}/p2p-circuit`]
       },
       ...defaultLibp2pConfig
-    }, { maxRegistrations: 1, datastore }) // Maximum of one registration
+    }, { maxPeerRegistrations: 1, datastore }) // Maximum of one registration
 
     multiaddrServer = multiaddr(`${relayAddr}/p2p-circuit/p2p/${peerId.toB58String()}`)
 

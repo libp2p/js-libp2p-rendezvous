@@ -64,7 +64,7 @@ module.exports = (rendezvousPoint) => {
       // simple limit to defend against trivial DoS attacks
       // example: a peer connects and keeps registering until it fills our memory
       const peerRegistrations = await rendezvousPoint.getNumberOfRegistrationsFromPeer(peerId)
-      if (peerRegistrations >= rendezvousPoint._maxRegistrations) {
+      if (peerRegistrations >= rendezvousPoint._maxPeerRegistrations) {
         log.error('unauthorized peer to register, too many registrations')
 
         return {

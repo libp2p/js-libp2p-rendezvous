@@ -85,6 +85,23 @@ class Mysql {
   }
 
   /**
+   * Run datastore garbage collector to remove expired records.
+   *
+   * @returns {Promise<number>}
+   */
+  gc () {
+    return new Promise((resolve, reject) => {
+      this.conn.query('DELETE FROM registration WHERE expiration <= NOW()',
+        (err, res) => {
+          if (err) {
+            return reject(err)
+          }
+          resolve(res.affectedRows)
+        })
+    })
+  }
+
+  /**
    * Add an entry to the registration table.
    *
    * @param {string} namespace
@@ -252,22 +269,19 @@ class Mysql {
    *
    * @param {string} ns
    * @param {PeerId} peerId
-   * @returns {Promise<void>}
+   * @returns {Promise<number>}
    */
   removeRegistration (ns, peerId) {
     const id = peerId.toB58String()
 
     return new Promise((resolve, reject) => {
-      this.conn.query(`
-        DELETE FROM cookie WHERE peer_id = ? AND namespace = ?;
-        DELETE FROM registration WHERE peer_id = ? AND namespace = ?
-      `, [id, ns, id, ns],
-      (err) => {
-        if (err) {
-          return reject(err)
-        }
-        resolve()
-      })
+      this.conn.query('DELETE FROM registration WHERE peer_id = ? AND namespace = ?', [id, ns],
+        (err, res) => {
+          if (err) {
+            return reject(err)
+          }
+          resolve(res.affectedRows)
+        })
     })
   }
 
@@ -275,22 +289,19 @@ class Mysql {
    * Remove all registrations of a given peer
    *
    * @param {PeerId} peerId
-   * @returns {Promise<void>}
+   * @returns {Promise<number>}
    */
   removePeerRegistrations (peerId) {
     const id = peerId.toB58String()
 
     return new Promise((resolve, reject) => {
-      this.conn.query(`
-        DELETE FROM cookie WHERE peer_id = ?;
-        DELETE FROM registration WHERE peer_id = ?
-      `, [id, id],
-      (err) => {
-        if (err) {
-          return reject(err)
-        }
-        resolve()
-      })
+      this.conn.query('DELETE FROM registration WHERE peer_id = ?', [id],
+        (err, res) => {
+          if (err) {
+            return reject(err)
+          }
+          resolve(res.affectedRows)
+        })
     })
   }
 
@@ -300,6 +311,7 @@ class Mysql {
    * @returns {Promise<void>}
    */
   _initDB () {
+    // TODO: Do I need created at cookie?
     return new Promise((resolve, reject) => {
       this.conn.query(`
         CREATE TABLE IF NOT EXISTS registration (
@@ -319,6 +331,7 @@ class Mysql {
           peer_id varchar(255) NOT NULL,
           created_at datetime DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (id, namespace, reg_id),
+          FOREIGN KEY (reg_id) REFERENCES registration(id) ON DELETE CASCADE,
           INDEX (created_at)
         );
       `, (err) => {
@@ -327,33 +340,6 @@ class Mysql {
         }
         resolve()
       })
-      // this.conn.query(`
-      //   CREATE TABLE IF NOT EXISTS registration (
-      //     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-      //     namespace varchar(255) NOT NULL,
-      //     peer_id varchar(255) NOT NULL,
-      //     signed_peer_record blob NOT NULL,
-      //     expiration timestamp NOT NULL,
-      //     PRIMARY KEY (id),
-      //     INDEX (namespace, expiration, peer_id)
-      //   );
-
-      //   CREATE TABLE IF NOT EXISTS cookie (
-      //     id varchar(21),
-      //     namespace varchar(255),
-      //     reg_id INT UNSIGNED,
-      //     peer_id varchar(255) NOT NULL,
-      //     created_at datetime DEFAULT CURRENT_TIMESTAMP,
-      //     PRIMARY KEY (id, namespace, reg_id),
-      //     FOREIGN KEY (reg_id) REFERENCES registration(id),
-      //     INDEX (created_at)
-      //   );
-      // `, (err) => {
-      //   if (err) {
-      //     return reject(err)
-      //   }
-      //   resolve()
-      // })
     })
   }
 }

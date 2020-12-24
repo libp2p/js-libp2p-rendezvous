@@ -14,6 +14,10 @@ export interface Datastore {
    */
   stop (): void;
   /**
+   * Run datastore garbage collector to remove expired records.
+   */
+  gc (): Promise<number>;
+  /**
    * Add a rendezvous registrations.
    */
   addRegistration (namespace: string, peerId: PeerId, signedPeerRecord: Uint8Array, ttl: number): Promise<void>;
@@ -28,11 +32,11 @@ export interface Datastore {
   /**
    * Remove registration of a given namespace to a peer.
    */
-  removeRegistration (ns: string, peerId: PeerId): Promise<void>;
+  removeRegistration (ns: string, peerId: PeerId): Promise<number>;
   /**
    * Remove all registrations of a given peer.
    */
-  removePeerRegistrations (peerId: PeerId): Promise<void>;
+  removePeerRegistrations (peerId: PeerId): Promise<number>;
   /**
    * Reset content
    */
