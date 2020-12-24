@@ -46,7 +46,23 @@ function getListenAddresses (argv) {
   return listenAddresses
 }
 
+/**
+ * Nullish coalescing operator implementation
+ *
+ * @template T
+ * @param {any} value
+ * @param {T} d - default value
+ * @returns {T}
+ */
+function fallbackNullish (value, d) {
+  if (value === null || value === undefined) {
+    return d
+  }
+  return value
+}
+
 module.exports = {
   getAnnounceAddresses,
-  getListenAddresses
+  getListenAddresses,
+  fallbackNullish
 }

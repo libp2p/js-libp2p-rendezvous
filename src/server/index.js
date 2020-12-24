@@ -26,6 +26,7 @@ const {
   GC_MAX_REGISTRATIONS,
   PROTOCOL_MULTICODEC
 } = require('./constants')
+const { fallbackNullish } = require('./utils')
 
 /**
  * @typedef {import('./datastores/interface').Datastore} Datastore
@@ -65,23 +66,21 @@ class RendezvousServer extends Libp2p {
   constructor (libp2pOptions, options) {
     super(libp2pOptions)
 
-    this._gcDelay = options.gcDelay || 3e5
-    this._gcInterval = options.gcInterval || 7.2e6
-    this._minTtl = options.minTtl || MIN_TTL
-    this._maxTtl = options.maxTtl || MAX_TTL
-    this._maxNsLength = options.maxNsLength || MAX_NS_LENGTH
-    this._maxDiscoveryLimit = options.maxDiscoveryLimit || MAX_DISCOVER_LIMIT
-    this._maxPeerRegistrations = options.maxPeerRegistrations || MAX_PEER_REGISTRATIONS
+    this._minTtl = fallbackNullish(options.minTtl, MIN_TTL)
+    this._maxTtl = fallbackNullish(options.maxTtl, MAX_TTL)
+    this._maxNsLength = fallbackNullish(options.maxNsLength, MAX_NS_LENGTH)
+    this._maxDiscoveryLimit = fallbackNullish(options.maxDiscoveryLimit, MAX_DISCOVER_LIMIT)
+    this._maxPeerRegistrations = fallbackNullish(options.maxPeerRegistrations, MAX_PEER_REGISTRATIONS)
 
     this.rendezvousDatastore = options.datastore
 
     this._registrationsCount = 0
     this._lastGcTs = 0
-    this._gcDelay = options.gcBootDelay || GC_BOOT_DELAY
-    this._gcInterval = options.gcInterval || GC_INTERVAL
-    this._gcMinInterval = options.gcMinInterval || GC_MIN_INTERVAL
-    this._gcMinRegistrations = options.gcMinRegistrations || GC_MIN_REGISTRATIONS
-    this._gcMaxRegistrations = options.gcMaxRegistrations || GC_MAX_REGISTRATIONS
+    this._gcDelay = fallbackNullish(options.gcBootDelay, GC_BOOT_DELAY)
+    this._gcInterval = fallbackNullish(options.gcInterval, GC_INTERVAL)
+    this._gcMinInterval = fallbackNullish(options.gcMinInterval, GC_MIN_INTERVAL)
+    this._gcMinRegistrations = fallbackNullish(options.gcMinRegistrations, GC_MIN_REGISTRATIONS)
+    this._gcMaxRegistrations = fallbackNullish(options.gcMaxRegistrations, GC_MAX_REGISTRATIONS)
     this._gcJob = this._gcJob.bind(this)
   }
 

@@ -65,7 +65,7 @@ const before = async () => {
     interval: 5000
   })
   // Some more time waiting
-  await delay(10e3)
+  await delay(12e3)
 }
 
 const after = async () => {

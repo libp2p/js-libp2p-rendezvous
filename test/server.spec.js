@@ -3,6 +3,9 @@
 
 const { expect } = require('aegir/utils/chai')
 const delay = require('delay')
+const sinon = require('sinon')
+const pRetry = require('p-retry')
+const pWaitFor = require('p-wait-for')
 
 const multiaddr = require('multiaddr')
 const Envelope = require('libp2p/src/record/envelope')
@@ -41,6 +44,7 @@ describe('rendezvous server', () => {
   afterEach(async () => {
     await datastore.reset()
     rServer && await rServer.stop()
+    sinon.reset()
   })
 
   it('can start a rendezvous server', async () => {
@@ -299,52 +303,135 @@ describe('rendezvous server', () => {
       .and.to.have.property('code', errCodes.INVALID_COOKIE)
   })
 
-  it.skip('gc expired records', async () => {
+  it('gc expired records on regular interval', async function () {
+    this.timeout(35e3)
+
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    }, { datastore, gcInterval: 300 })
+    }, {
+      datastore,
+      gcInterval: 1000,
+      gcBootDelay: 1000,
+      gcMinInterval: 0,
+      gcMinRegistrations: 0
+    })
+    const spy = sinon.spy(rServer, '_gc')
     await rServer.start()
 
-    // Add registration for peer 1 in test namespace
-    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 500)
-    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 1000)
+    // Add registrations in test namespace
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1500)
+    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 3200)
 
     let r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(2)
 
-    // wait for firt record to be removed
-    await delay(650)
+    // wait for firt record to be removed (2nd gc)
+    await pWaitFor(() => spy.callCount >= 2)
+
     r = await rServer.getRegistrations(testNamespace)
     expect(r.registrations).to.have.lengthOf(1)
 
-    await delay(400)
-    r = await rServer.getRegistrations(testNamespace)
-    expect(r.registrations).to.have.lengthOf(0)
+    // wait for second record to be removed
+    await pRetry(async () => {
+      r = await rServer.getRegistrations(testNamespace)
+      expect(r.registrations).to.have.lengthOf(0)
+    })
   })
 
-  it.skip('garbage collector should remove cookies of discarded records', async () => {
+  it('gc expired records when maximum threshold', async function () {
+    this.timeout(35e3)
+
     rServer = new RendezvousServer({
       ...defaultLibp2pConfig,
       peerId: peerIds[0]
-    }, { datastore, gcDelay: 300, gcInterval: 300 })
+    }, {
+      datastore,
+      // gcMinInterval: 0,
+      gcMaxRegistrations: 2
+    })
+    const spy = sinon.spy(rServer, '_gc')
     await rServer.start()
 
-    // Add registration for peer 1 in test namespace
+    // Add registrations in test namespace
     await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 500)
 
-    // Get current registrations
-    const { registrations } = await rServer.getRegistrations(testNamespace)
-    expect(registrations).to.exist()
-    expect(registrations).to.have.lengthOf(1)
+    let r = await rServer.getRegistrations(testNamespace)
+    expect(r.registrations).to.have.lengthOf(1)
 
-    // Verify internal state
-    // expect(rServer.datastore.nsRegistrations.get(testNamespace).size).to.eql(1)
-    // expect(rServer.datastore.cookieRegistrations.get(cookie)).to.exist()
+    // Validate peer
+    let envelope = await Envelope.openAndCertify(r.registrations[0].signedPeerRecord, PeerRecord.DOMAIN)
+    expect(envelope.peerId.toString()).to.eql(peerIds[1].toString())
 
-    await delay(800)
+    // Wait for previous record to be expired
+    await delay(500)
 
-    // expect(rServer.datastore.nsRegistrations.get(testNamespace).size).to.eql(0)
-    // expect(rServer.datastore.cookieRegistrations.get(cookie)).to.not.exist()
+    // Add registrations in test namespace exceending the max number for gc trigger
+    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 3200)
+
+    await pWaitFor(() => spy.callCount === 1)
+
+    // retry as rServer._gc is async and it can be removing
+    await pRetry(async () => {
+      r = await rServer.getRegistrations(testNamespace)
+      expect(r.registrations).to.have.lengthOf(1)
+
+      envelope = await Envelope.openAndCertify(r.registrations[0].signedPeerRecord, PeerRecord.DOMAIN)
+      expect(envelope.peerId.toString()).to.eql(peerIds[2].toString())
+    })
+  })
+
+  it('gc expired records when maximum threshold only if gc min interval', async function () {
+    this.timeout(45e3)
+
+    rServer = new RendezvousServer({
+      ...defaultLibp2pConfig,
+      peerId: peerIds[0]
+    }, {
+      datastore,
+      gcMaxRegistrations: 2
+    })
+    const spy = sinon.spy(rServer, '_gc')
+    await rServer.start()
+
+    // Add registrations in test namespace
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 500)
+
+    let r = await rServer.getRegistrations(testNamespace)
+    expect(r.registrations).to.have.lengthOf(1)
+
+    // Wait for previous record to be expired
+    await delay(500)
+
+    // Add registrations in test namespace exceending the max number for gc trigger
+    await rServer.addRegistration(testNamespace, peerIds[2], signedPeerRecords[2], 3000)
+
+    // Wait for gc
+    await pWaitFor(() => spy.callCount === 1)
+
+    // retry as rServer._gc is async and it can take longer to finish
+    await pRetry(async () => {
+      r = await rServer.getRegistrations(testNamespace)
+      expect(r.registrations).to.have.lengthOf(1)
+    })
+
+    // Wait for second record to be expired
+    await delay(3000)
+
+    // Add a new registration
+    await rServer.addRegistration(testNamespace, peerIds[1], signedPeerRecords[1], 1000)
+
+    await Promise.race([
+      async () => {
+        // GC should not be triggered, even with max registrations as minInterval was not reached
+        await pWaitFor(() => spy.callCount === 2)
+        throw new Error('should not call gc')
+      },
+      // It should return 0 records, even without gc, as expired records are not returned
+      await pRetry(async () => {
+        r = await rServer.getRegistrations(testNamespace)
+        expect(r.registrations).to.have.lengthOf(0)
+      })
+    ])
   })
 })
