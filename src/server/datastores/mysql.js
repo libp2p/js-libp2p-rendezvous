@@ -329,10 +329,8 @@ class Mysql {
           namespace varchar(255),
           reg_id INT UNSIGNED,
           peer_id varchar(255) NOT NULL,
-          created_at datetime DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (id, namespace, reg_id),
-          FOREIGN KEY (reg_id) REFERENCES registration(id) ON DELETE CASCADE,
-          INDEX (created_at)
+          FOREIGN KEY (reg_id) REFERENCES registration(id) ON DELETE CASCADE
         );
       `, (err) => {
         if (err) {

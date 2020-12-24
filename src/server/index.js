@@ -31,17 +31,11 @@ const { fallbackNullish } = require('./utils')
 /**
  * @typedef {import('./datastores/interface').Datastore} Datastore
  * @typedef {import('./datastores/interface').Registration} Registration
- *
- * @typedef {Object} NamespaceRegistration
- * @property {string} id random generated id to map cookies
- * @property {number} expiration
  */
 
 /**
  * @typedef {Object} RendezvousServerOptions
  * @property {Datastore} datastore
- * @property {number} [gcDelay = 3e5] garbage collector delay (default: 5 minutes)
- * @property {number} [gcInterval = 7.2e6] garbage collector interval (default: 2 hours)
  * @property {number} [minTtl = MIN_TTL] minimum acceptable ttl to store a registration
  * @property {number} [maxTtl = MAX_TTL] maxium acceptable ttl to store a registration
  * @property {number} [maxNsLength = MAX_NS_LENGTH] maxium acceptable namespace length

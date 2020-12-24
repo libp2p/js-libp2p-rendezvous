@@ -1,9 +1,18 @@
 {
   "name": "libp2p-rendezvous",
   "version": "0.0.0",
-  "description": "Javascript implementation of the rendezvous protocol for libp2p",
+  "description": "Javascript implementation of the rendezvous protocol server for libp2p",
   "leadMaintainer": "Vasco Santos <santos.vasco10@gmail.com>",
   "main": "src/index.js",
+  "types": "dist/src/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "src/*": [
+        "dist/src/*",
+        "dist/src/*/index"
+      ]
+    }
+  },
   "bin": {
     "libp2p-rendezvous-server": "src/server/bin.js"
   },

@@ -18,8 +18,10 @@
 - [Overview](#overview)
 - [Usage](#usage)
   - [Install](#install)
+  - [Testing](#testing)
   - [CLI](#cli)
   - [Docker Setup](#docker-setup)
+- [Garbage Collector](#garbage-collector)
 - [Contribute](#contribute)
 - [License](#license)
 
@@ -37,7 +39,7 @@ See the [SPEC](https://github.com/libp2p/specs/tree/master/rendezvous) for more 
 > npm install --global libp2p-rendezvous
 ```
 
-Now you can use the cli command `libp2p-rendezvous-server` to spawn a libp2p rendezvous server. Bear in mind that a MySQL database is required to run the rendezvous server.
+Now you can use the cli command `libp2p-rendezvous-server` to spawn a libp2p rendezvous server. Bear in mind that a MySQL database is required to run the rendezvous server. You can also use this module as a library and implement your own datastore to use a different database. A datastore `interface` is provided in this repository.
 
 ### Testing
 
@@ -67,7 +69,7 @@ Once a MySQL database is running, you can run the rendezvous server by providing
 libp2p-rendezvous-server --datastoreHost 'localhost' --datastoreUser 'root' --datastorePassword 'your-secret-pw' --datastoreDatabase 'libp2p_rendezvous_db'
 ```
 
-⚠️ For testing purposes you can skip using MySQL and use a memory datastore. This must not be used in production! For this you just need to provide the `--enableMemoryDatabase` option.
+⚠️ For testing purposes you can skip using MySQL and use a memory datastore. **This must not be used in production!**. For this you just need to provide the `--enableMemoryDatabase` option.
 
 #### PeerId
 
@@ -106,6 +108,8 @@ libp2p-rendezvous-server --disableMetrics
 
 ### Docker Setup
 
+TODO: Finish docker setup
+
 ```yml
 version: '3.1'
 services:
@@ -124,11 +128,18 @@ volumes:
   mysql-db:
 ```
 
-## Library
+### Library
 
-TODO
+TODO: How to use this module as a library
+- Datastores
 
-Datastores
+## Garbage Collector
+
+The rendezvous server has a built in garbage collector (GC) that removes persisted data over time, as it is expired.
+
+The GC job has two different triggers. It will run over time according to the configurable `gcBootDelay` and `gcInterval` options, and it will run if it reaches a configurable `gcMaxRegistrations` threshold.
+
+Taking into account the GC performance, two other factors are considered before the GC interacts with the Datastore. If a configurable number of minimum registrations `gcMinRegistrations` are not stored, the GC job will not act in this GC cycle. Moreover, to avoid multiple attempts of GC when the max threshold is reached, but no records are yet expired, a minimum interval between each job can also be configured with `gcMinInterval`.
 
 ## Contribute
 

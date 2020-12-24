@@ -1,7 +1,7 @@
-FROM node:lts-buster
+FROM node:lts-alpine
 
 # Install deps
-RUN apt-get update && apt-get install -y
+RUN apk add --update git build-base python3
 
 # Get dumb-init to allow quit running interactively
 RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.2.0_amd64 && chmod +x /usr/local/bin/dumb-init
@@ -21,14 +21,8 @@ RUN npm install --production
 COPY --chown=node:node ./src ./src
 COPY --chown=node:node ./README.md ./
 
-# rendezvous defaults to 15002
-EXPOSE 15002
-
-# metrics defaults to 8003
-EXPOSE 8003
+ENV DEBUG libp2p*
 
 # Available overrides (defaults shown):
-#   --disableMetrics=false
-# Server logging can be enabled via the DEBUG environment variable:
-#   DEBUG=libp2p:rendezvous:*
+# Server logging can be enabled via the DEBUG environment variable
 CMD [ "/usr/local/bin/dumb-init", "node", "src/server/bin.js"]

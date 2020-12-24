@@ -11,10 +11,6 @@ services:
       MYSQL_USER: libp2p
       MYSQL_PASSWORD: my-secret-pw
       MYSQL_DATABASE: libp2p_rendezvous_db
-      # MYSQL_DATABASE: ${DATABASE}
-      # MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
-      # MYSQL_USER: ${USER}
-      # MYSQL_PASSWORD: ${PASSWORD}
     ports:
       - "3306:3306"
 volumes:

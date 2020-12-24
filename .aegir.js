@@ -8,7 +8,6 @@ const WebSockets = require('libp2p-websockets')
 const Muxer = require('libp2p-mplex')
 const { NOISE: Crypto } = require('libp2p-noise')
 
-const { isNode } = require('ipfs-utils/src/env')
 const delay = require('delay')
 const execa = require('execa')
 const pWaitFor = require('p-wait-for')
@@ -44,8 +43,10 @@ const before = async () => {
   
   await libp2p.start()
 
-  // CI runs datastore service
-  if (isCI || !isNode) {
+  // TODO: if not running test suite in Node, can also stop here
+  // https://github.com/ipfs/aegir/issues/707
+  // CI runs own datastore service
+  if (isCI) {
     return
   }
 
@@ -64,14 +65,14 @@ const before = async () => {
   }, {
     interval: 5000
   })
-  // Some more time waiting
+  // Some more time waiting to guarantee the container is really ready
   await delay(12e3)
 }
 
 const after = async () => {
   await libp2p.stop()
 
-  if (isCI || !isNode) {
+  if (isCI) {
     return
   }
 
@@ -80,7 +81,7 @@ const after = async () => {
 }
 
 module.exports = {
-  bundlesize: { maxSize: '100kB' },
+  bundlesize: { maxSize: '80kB' },
   hooks: {
     pre: before,
     post: after

@@ -2,7 +2,8 @@
 
 'use strict'
 
-// Usage: $0 [--peerId <jsonFilePath>] [--listenMultiaddrs <ma> ... <ma>] [--announceMultiaddrs <ma> ... <ma>] [--metricsPort <port>] [--disableMetrics]
+// Usage: $0 [--datastoreHost <hostname>] [--datastoreUser <username>] [datastorePassword <password>] [datastoreDatabase <name>] [--enableMemoryDatabase]
+//            [--peerId <jsonFilePath>] [--listenMultiaddrs <ma> ... <ma>] [--announceMultiaddrs <ma> ... <ma>] [--metricsPort <port>] [--disableMetrics]
 
 /* eslint-disable no-console */
 
@@ -23,9 +24,17 @@ const PeerId = require('peer-id')
 
 const RendezvousServer = require('./index')
 const Datastore = require('./datastores/mysql')
+const DatastoreMemory = require('./datastores/memory')
 const { getAnnounceAddresses, getListenAddresses } = require('./utils')
 
 async function main () {
+  // Datastore
+  const memoryDatabase = (argv.enableMemoryDatabase || argv.emd || process.env.DISABLE_METRICS)
+  const host = argv.datastoreHost || argv.dh || process.env.DATASTORE_HOST || 'localhost'
+  const user = argv.datastoreUser || argv.du || process.env.DATASTORE_USER || 'root'
+  const password = argv.datastorePassword || argv.dp || process.env.DATASTORE_PASSWORD || 'test-secret-pw'
+  const database = argv.datastoreDatabase || argv.dd || process.env.DATASTORE_DATABASE || 'libp2p_rendezvous_db'
+
   // Metrics
   let metricsServer
   const metrics = !(argv.disableMetrics || process.env.DISABLE_METRICS)
@@ -46,11 +55,11 @@ async function main () {
     log('If you want to keep the same address for the server you should provide a peerId with --peerId <jsonFilePath>')
   }
 
-  const datastore = new Datastore({
-    host: 'localhost',
-    user: 'root',
-    password: 'test-secret-pw',
-    database: 'libp2p_rendezvous_db'
+  const datastore = memoryDatabase ? new DatastoreMemory() : new Datastore({
+    host,
+    user,
+    password,
+    database
   })
 
   // Create Rendezvous server

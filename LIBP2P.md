@@ -13,14 +13,15 @@ const Libp2p = require('libp2p')
 
 const node = await Libp2p.create({
   rendezvous: {
-    enabled: true
+    enabled: true,
+    rendezvousPoints: ['/dnsaddr/rendezvous.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJP']
   }
 })
 ```
 
 ## Libp2p Flow
 
-When a libp2p node with the rendezvous protocol enabled starts, it should start by connecting to a rendezvous server. The rendezvous server can be added to the bootstrap nodes or manually dialed. When a rendezvous server is connected, the node can ask for nodes in given namespaces. An example of a namespace could be a relay namespace, so that undialable nodes can register themselves as reachable through that relay.
+When a libp2p node with the rendezvous protocol enabled starts, it should start by connecting to the given rendezvous servers. When a rendezvous server is connected, the node can ask for nodes in given namespaces. An example of a namespace could be a relay namespace, so that undialable nodes can register themselves as reachable through that relay.
 
 When a libp2p node running the rendezvous protocol is stopping, it will unregister from all the namespaces previously registered.
 
@@ -34,16 +35,17 @@ This API allows users to register new rendezvous namespaces, unregister from pre
 |------|------|-------------|
 | options | `object` | rendezvous parameters |
 | options.enabled | `boolean` | is rendezvous enabled |
+| options.rendezvousPoints | `Multiaddr[]` | list of multiaddrs of running rendezvous servers |
 
 ### rendezvous.start
 
-Register the rendezvous protocol topology into libp2p.
+Start the rendezvous client in the libp2p node.
 
 `rendezvous.start()`
 
 ### rendezvous.stop
 
-Unregister the rendezvous protocol and the streams with other peers will be closed.
+Clear the rendezvous state and unregister from namespaces.
 
 `rendezvous.stop()`
 
@@ -117,7 +119,7 @@ Discovers peers registered under a given namespace.
 
 | Type | Description |
 |------|-------------|
-| `AsyncIterable<{ signedPeerRecord: Envelope, ns: string, ttl: number }>` | Async Iterable registrations |
+| `AsyncIterable<{ signedPeerRecord: Uint8Array, ns: string, ttl: number }>` | Async Iterable registrations |
 
 #### Example
 
@@ -129,3 +131,9 @@ for await (const reg of rendezvous.discover(namespace)) {
   console.log(reg.signedPeerRecord, reg.ns, reg.ttl)
 }
 ```
+
+## Future Work
+
+- Libp2p can handle re-registers when properly configured
+- Rendezvous client should be able to register namespaces given in configuration on startup
+  - Not supported at the moment, as we would need to deal with re-register over time

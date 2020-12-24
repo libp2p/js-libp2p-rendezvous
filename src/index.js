@@ -59,7 +59,7 @@ class Rendezvous {
   }
 
   /**
-   * Register the rendezvous protocol in the libp2p node.
+   * Start the rendezvous client in the libp2p node.
    *
    * @returns {void}
    */
@@ -73,7 +73,7 @@ class Rendezvous {
   }
 
   /**
-   * Clear the rendezvous state and remove listeners.
+   * Clear the rendezvous state and unregister from namespaces.
    *
    * @returns {void}
    */
@@ -85,6 +85,8 @@ class Rendezvous {
     this._isStarted = false
     this._cookies.clear()
     log('stopped')
+
+    // TODO: should unregister from the namespaces registered
   }
 
   /**
@@ -156,7 +158,7 @@ class Rendezvous {
     }
 
     // Return first ttl
-    // TODO: consider pAny
+    // TODO: consider pAny instead of Promise.all?
     const [returnTtl] = await Promise.all(registerTasks)
 
     return returnTtl
@@ -225,6 +227,9 @@ class Rendezvous {
    * @returns {AsyncIterable<{ signedPeerRecord: Uint8Array, ns: string, ttl: number }>}
    */
   async * discover (ns, limit = MAX_DISCOVER_LIMIT) {
+    // TODO: consider opening the envelope in the dicover
+    // This would store the addresses in the AddressBook
+
     // Are there available rendezvous servers?
     if (!this._rendezvousPoints || !this._rendezvousPoints.length) {
       throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
