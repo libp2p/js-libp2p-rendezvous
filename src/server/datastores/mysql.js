@@ -206,8 +206,8 @@ class Mysql {
     // Store in cookies if results available
     await new Promise((resolve, reject) => {
       this.conn.query(
-        `INSERT INTO ?? (id, namespace, reg_id, peer_id) VALUES ${results.map((entry) =>
-          `(${this.conn.escape(cookie)}, ${this.conn.escape(entry.namespace)}, ${this.conn.escape(entry.id)}, ${this.conn.escape(entry.peer_id)})`
+        `INSERT INTO ?? (id, namespace, reg_id) VALUES ${results.map((entry) =>
+          `(${this.conn.escape(cookie)}, ${this.conn.escape(entry.namespace)}, ${this.conn.escape(entry.id)})`
         )}`, ['cookie']
         , (err) => {
           if (err) {
@@ -311,7 +311,6 @@ class Mysql {
    * @returns {Promise<void>}
    */
   _initDB () {
-    // TODO: Do I need created at cookie?
     return new Promise((resolve, reject) => {
       this.conn.query(`
         CREATE TABLE IF NOT EXISTS registration (
@@ -328,7 +327,6 @@ class Mysql {
           id varchar(21),
           namespace varchar(255),
           reg_id INT UNSIGNED,
-          peer_id varchar(255) NOT NULL,
           PRIMARY KEY (id, namespace, reg_id),
           FOREIGN KEY (reg_id) REFERENCES registration(id) ON DELETE CASCADE
         );
