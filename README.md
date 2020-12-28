@@ -130,8 +130,36 @@ volumes:
 
 ### Library
 
-TODO: How to use this module as a library
-- Datastores
+The rendezvous server can be used as a library, in order to spawn your custom server. This is useful if you want to customize libp2p's transports or use a different database as a datastore.
+
+```js
+const RendezvousServer = require('libp2p-rendezvous')
+
+const server = new RendezvousServer({
+  libp2pOptions,
+  rendezvousServerOptions
+})
+```
+
+`libp2pOptions` contains the libp2p [node options](https://github.com/libp2p/js-libp2p/blob/master/doc/API.md#create) to create a libp2p node.
+
+#### rendezvousServerOptions
+
+The `rendezvousServerOptions` customizes the rendezvous server. Only the `datastore` is required.
+
+| Name | Type | Description |
+|------|------|-------------|
+| datastore | `object` | [datastore implementation](./src/server/datastores/README.md) |
+| [minTtl] | `number` | minimum acceptable ttl to store a registration |
+| [maxTtl] | `number` | maximum acceptable ttl to store a registration |
+| [maxNsLength] | `number` | maximum acceptable namespace length |
+| [maxDiscoveryLimit] | `number` | maximum acceptable discover limit |
+| [maxPeerRegistrations] | `number` | maximum acceptable registrations per peer |
+| [gcBootDelay] | `number` | delay before starting garbage collector job |
+| [gcMinInterval] | `number` | minimum interval between each garbage collector job, in case maximum threshold reached |
+| [gcInterval] | `number` | interval between each garbage collector job |
+| [gcMinRegistrations] | `number` | minimum number of registration for triggering garbage collector |
+| [gcMaxRegistrations] | `number` | maximum number of registration for triggering garbage collector |
 
 ## Garbage Collector
 
