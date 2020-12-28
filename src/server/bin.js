@@ -46,8 +46,8 @@ async function main () {
 
   // PeerId
   let peerId
-  if (argv.peerId) {
-    const peerData = fs.readFileSync(argv.peerId)
+  if (argv.peerId || process.env.PEER_ID) {
+    const peerData = fs.readFileSync(argv.peerId || process.env.PEER_ID)
     peerId = await PeerId.createFromJSON(JSON.parse(peerData.toString()))
   } else {
     peerId = await PeerId.create()

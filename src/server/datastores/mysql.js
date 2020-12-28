@@ -8,6 +8,7 @@ const errCode = require('err-code')
 const { codes: errCodes } = require('../errors')
 
 const mysql = require('mysql')
+const pRetry = require('p-retry')
 
 /**
  * @typedef {import('peer-id')} PeerId
@@ -58,9 +59,8 @@ class Mysql {
    * @returns {Promise<void>}
    */
   async start () {
-    this.conn = mysql.createConnection(this.options)
-
-    await this._initDB()
+    // Retry starting the Database in case it is still booting
+    await pRetry(() => this._initDB())
   }
 
   /**
@@ -311,6 +311,8 @@ class Mysql {
    * @returns {Promise<void>}
    */
   _initDB () {
+    this.conn = mysql.createConnection(this.options)
+
     return new Promise((resolve, reject) => {
       this.conn.query(`
         CREATE TABLE IF NOT EXISTS registration (
@@ -332,8 +334,10 @@ class Mysql {
         );
       `, (err) => {
         if (err) {
+          log.error(err)
           return reject(err)
         }
+        log('db is initialized')
         resolve()
       })
     })

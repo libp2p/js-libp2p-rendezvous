@@ -69,6 +69,7 @@
     "minimist": "^1.2.5",
     "multiaddr": "^8.0.0",
     "mysql": "^2.18.1",
+    "p-retry": "^4.2.0",
     "peer-id": "^0.14.1",
     "protons": "^2.0.0",
     "set-delayed-interval": "^1.0.0",
@@ -85,7 +86,6 @@
     "ipfs-utils": "^5.0.1",
     "is-ci": "^2.0.0",
     "p-defer": "^3.0.0",
-    "p-retry": "^4.2.0",
     "p-times": "^3.0.0",
     "p-wait-for": "^3.1.0",
     "sinon": "^9.0.3"

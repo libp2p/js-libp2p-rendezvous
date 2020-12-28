@@ -108,22 +108,75 @@ libp2p-rendezvous-server --disableMetrics
 
 ### Docker Setup
 
-TODO: Finish docker setup
+When running the rendezvous server in Docker, you can configure the same parameters via environment variables, as follows:
+
+```sh
+PEER_ID='/etc/opt/rendezvous/id.json'
+LISTEN_MULTIADDRS='/ip4/127.0.0.1/tcp/15002/ws,/ip4/127.0.0.1/tcp/8001'
+ANNOUNCE_MULTIADDRS='/dns4/test.io/tcp/443/wss,/dns6/test.io/tcp/443/wss'
+DATASTORE_HOST='localhost'
+DATASTORE_USER='root'
+DATASTORE_PASSWORD='your-secret-pw'
+DATASTORE_DATABASE='libp2p_rendezvous_db'
+```
+
+Please note that you should expose the listening ports with the docker run command. The default ports used are `8003` for the metrics, `8000` for the tcp listener and `150003` for the websockets listener.
+
+Example:
+
+```sh
+peer-id --type=ed25519 > id.json
+docker build . -t libp2p-rendezvous
+docker run -p 8003:8003 -p 15002:15002 -p 8000:8000 \
+-e LISTEN_MULTIADDRS='/ip4/127.0.0.1/tcp/8000,/ip4/127.0.0.1/tcp/15002/ws' \
+-e ANNOUNCE_MULTIADDRS='/dns4/localhost/tcp/8000,/dns4/localhost/tcp/15002/ws' \
+-e DATASTORE_USER='root' \
+-e DATASTORE_PASSWORD='your-secret-pw' \
+-e DATASTORE_DATABASE='libp2p_rendezvous_db' \
+-e PEER_ID='/etc/opt/rendezvous/id.json' \
+-v $PWD/id.json:/etc/opt/rendezvous/id.json \
+-d libp2p-rendezvous
+```
+
+### Docker compose setup with mysql
+
+Here follows an example on how you can setup a rendezvous server with a mysql database.
 
 ```yml
-version: '3.1'
+version: '3.2'
 services:
   db:
-    image: mysql
+    image: mysql:8
     volumes:
-        - mysql-db:/var/lib/mysql
+      - mysql-db:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: your-secret-pw
-      MYSQL_DATABASE: libp2p_rendezvous_db
+      - MYSQL_ROOT_PASSWORD=my-secret-pw
+      - MYSQL_DATABASE=libp2p_rendezvous_db
     ports:
       - "3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", 'mysqladmin ping']
+      interval: 10s
+      timeout: 2s
+      retries: 10
+  server:
+    image: libp2p/js-libp2p-rendezvous
+    volumes:
+      - ./id.json:/etc/opt/rendezvous/id.json
+    ports:
+      - "8000:8000"
+      - "8003:8003"
+      - "15003:15003"
+    restart: always
+    environment:
+      - DATASTORE_PASSWORD=my-secret-pw
+      - DATASTORE_DATABASE=libp2p_rendezvous_db
+      - DATASTORE_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
 volumes:
   mysql-db:
 ```

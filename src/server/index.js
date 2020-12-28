@@ -37,10 +37,10 @@ const { fallbackNullish } = require('./utils')
  * @typedef {Object} RendezvousServerOptions
  * @property {Datastore} datastore
  * @property {number} [minTtl = MIN_TTL] minimum acceptable ttl to store a registration
- * @property {number} [maxTtl = MAX_TTL] maxium acceptable ttl to store a registration
- * @property {number} [maxNsLength = MAX_NS_LENGTH] maxium acceptable namespace length
- * @property {number} [maxDiscoveryLimit = MAX_DISCOVER_LIMIT] maxium acceptable discover limit
- * @property {number} [maxPeerRegistrations = MAX_PEER_REGISTRATIONS] maxium acceptable registrations per peer
+ * @property {number} [maxTtl = MAX_TTL] maximum acceptable ttl to store a registration
+ * @property {number} [maxNsLength = MAX_NS_LENGTH] maximum acceptable namespace length
+ * @property {number} [maxDiscoveryLimit = MAX_DISCOVER_LIMIT] maximum acceptable discover limit
+ * @property {number} [maxPeerRegistrations = MAX_PEER_REGISTRATIONS] maximum acceptable registrations per peer
  * @property {number} [gcBootDelay = GC_BOOT_DELAY] delay before starting garbage collector job
  * @property {number} [gcMinInterval = GC_MIN_INTERVAL] minimum interval between each garbage collector job, in case maximum threshold reached
  * @property {number} [gcInterval = GC_INTERVAL] interval between each garbage collector job
