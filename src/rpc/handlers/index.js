@@ -1,6 +1,6 @@
 'use strict'
 
-const { Message } = require('../../../proto')
+const { Message } = require('../../proto')
 const MESSAGE_TYPE = Message.MessageType
 
 module.exports = (server) => {

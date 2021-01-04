@@ -25,4 +25,4 @@ ENV DEBUG libp2p*
 
 # Available overrides (defaults shown):
 # Server logging can be enabled via the DEBUG environment variable
-CMD [ "/usr/local/bin/dumb-init", "node", "src/server/bin.js"]
+CMD [ "/usr/local/bin/dumb-init", "node", "src/bin.js"]

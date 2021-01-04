@@ -10,7 +10,7 @@ const lp = require('it-length-prefixed')
 const { toBuffer } = require('it-buffer')
 
 const handlers = require('./handlers')
-const { Message } = require('../../proto')
+const { Message } = require('../proto')
 
 module.exports = (rendezvous) => {
   const getMessageHandler = handlers(rendezvous)

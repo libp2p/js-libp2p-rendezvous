@@ -9,7 +9,7 @@ const log = Object.assign(debug('libp2p:rendezvous-server:rpc:discover'), {
 const fromString = require('uint8arrays/from-string')
 const toString = require('uint8arrays/to-string')
 
-const { Message } = require('../../../proto')
+const { Message } = require('../../proto')
 const MESSAGE_TYPE = Message.MessageType
 const RESPONSE_STATUS = Message.ResponseStatus
 

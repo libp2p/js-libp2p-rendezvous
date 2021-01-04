@@ -13,7 +13,7 @@ const multiaddr = require('multiaddr')
 const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')
 
-const RendezvousServer = require('../src/server')
+const RendezvousServer = require('../src')
 
 const Peers = require('./fixtures/peers')
 const { MULTIADDRS_WEBSOCKETS } = require('./fixtures/browser')
@@ -120,11 +120,11 @@ module.exports.createSignedPeerRecord = createSignedPeerRecord
 
 function createDatastore () {
   if (!isNode) {
-    const Memory = require('../src/server/datastores/memory')
+    const Memory = require('../src/datastores/memory')
     return new Memory()
   }
 
-  const MySql = require('../src/server/datastores/mysql')
+  const MySql = require('../src/datastores/mysql')
   const datastore = new MySql({
     host: 'localhost',
     user: 'root',

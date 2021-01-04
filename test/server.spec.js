@@ -11,8 +11,8 @@ const multiaddr = require('multiaddr')
 const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')
 
-const RendezvousServer = require('../src/server')
-const { codes: errCodes } = require('../src/server/errors')
+const RendezvousServer = require('../src')
+const { codes: errCodes } = require('../src/errors')
 const {
   createPeerId,
   createSignedPeerRecord,

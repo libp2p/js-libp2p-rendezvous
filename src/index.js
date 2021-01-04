@@ -1,305 +1,229 @@
 'use strict'
 
 const debug = require('debug')
-const log = Object.assign(debug('libp2p:rendezvous'), {
-  error: debug('libp2p:rendezvous:err')
+const log = Object.assign(debug('libp2p:rendezvous-server'), {
+  error: debug('libp2p:rendezvous-server:err')
 })
-
-const errCode = require('err-code')
-const { pipe } = require('it-pipe')
-const lp = require('it-length-prefixed')
-const { collect } = require('streaming-iterables')
-const { toBuffer } = require('it-buffer')
-const fromString = require('uint8arrays/from-string')
-const toString = require('uint8arrays/to-string')
-
-const { codes: errCodes } = require('./errors')
 const {
+  setDelayedInterval,
+  clearDelayedInterval
+} = require('set-delayed-interval')
+
+const Libp2p = require('libp2p')
+const PeerId = require('peer-id')
+
+const rpc = require('./rpc')
+const {
+  MIN_TTL,
+  MAX_TTL,
+  MAX_NS_LENGTH,
   MAX_DISCOVER_LIMIT,
+  MAX_PEER_REGISTRATIONS,
+  GC_BOOT_DELAY,
+  GC_INTERVAL,
+  GC_MIN_INTERVAL,
+  GC_MIN_REGISTRATIONS,
+  GC_MAX_REGISTRATIONS,
   PROTOCOL_MULTICODEC
 } = require('./constants')
-const { Message } = require('./proto')
-const MESSAGE_TYPE = Message.MessageType
+const { fallbackNullish } = require('./utils')
 
 /**
- * @typedef {import('libp2p')} Libp2p
- * @typedef {import('multiaddr')} Multiaddr
+ * @typedef {import('./datastores/interface').Datastore} Datastore
+ * @typedef {import('./datastores/interface').Registration} Registration
  */
 
 /**
- * @typedef {Object} RendezvousProperties
- * @property {Libp2p} libp2p
- *
- * @typedef {Object} RendezvousOptions
- * @property {Multiaddr[]} rendezvousPoints
+ * @typedef {Object} RendezvousServerOptions
+ * @property {Datastore} datastore
+ * @property {number} [minTtl = MIN_TTL] minimum acceptable ttl to store a registration
+ * @property {number} [maxTtl = MAX_TTL] maximum acceptable ttl to store a registration
+ * @property {number} [maxNsLength = MAX_NS_LENGTH] maximum acceptable namespace length
+ * @property {number} [maxDiscoveryLimit = MAX_DISCOVER_LIMIT] maximum acceptable discover limit
+ * @property {number} [maxPeerRegistrations = MAX_PEER_REGISTRATIONS] maximum acceptable registrations per peer
+ * @property {number} [gcBootDelay = GC_BOOT_DELAY] delay before starting garbage collector job
+ * @property {number} [gcMinInterval = GC_MIN_INTERVAL] minimum interval between each garbage collector job, in case maximum threshold reached
+ * @property {number} [gcInterval = GC_INTERVAL] interval between each garbage collector job
+ * @property {number} [gcMinRegistrations = GC_MIN_REGISTRATIONS] minimum number of registration for triggering garbage collector
+ * @property {number} [gcMaxRegistrations = GC_MAX_REGISTRATIONS] maximum number of registration for triggering garbage collector
  */
 
-class Rendezvous {
+/**
+ * Libp2p rendezvous server.
+ */
+class RendezvousServer extends Libp2p {
   /**
-   * Libp2p Rendezvous. A lightweight mechanism for generalized peer discovery.
-   *
    * @class
-   * @param {RendezvousProperties & RendezvousOptions} params
+   * @param {import('libp2p').Libp2pOptions} libp2pOptions
+   * @param {RendezvousServerOptions} options
    */
-  constructor ({ libp2p, rendezvousPoints }) {
-    this._libp2p = libp2p
-    this._peerId = libp2p.peerId
-    this._peerStore = libp2p.peerStore
-    this._connectionManager = libp2p.connectionManager
-    this._rendezvousPoints = rendezvousPoints
+  constructor (libp2pOptions, options) {
+    super(libp2pOptions)
 
-    this._isStarted = false
+    this._minTtl = fallbackNullish(options.minTtl, MIN_TTL)
+    this._maxTtl = fallbackNullish(options.maxTtl, MAX_TTL)
+    this._maxNsLength = fallbackNullish(options.maxNsLength, MAX_NS_LENGTH)
+    this._maxDiscoveryLimit = fallbackNullish(options.maxDiscoveryLimit, MAX_DISCOVER_LIMIT)
+    this._maxPeerRegistrations = fallbackNullish(options.maxPeerRegistrations, MAX_PEER_REGISTRATIONS)
 
-    /**
-     * Map namespaces to a map of rendezvous point identifier to cookie.
-     *
-     * @type {Map<string, Map<string, string>>}
-     */
-    this._cookies = new Map()
+    this.rendezvousDatastore = options.datastore
+
+    this._registrationsCount = 0
+    this._lastGcTs = 0
+    this._gcDelay = fallbackNullish(options.gcBootDelay, GC_BOOT_DELAY)
+    this._gcInterval = fallbackNullish(options.gcInterval, GC_INTERVAL)
+    this._gcMinInterval = fallbackNullish(options.gcMinInterval, GC_MIN_INTERVAL)
+    this._gcMinRegistrations = fallbackNullish(options.gcMinRegistrations, GC_MIN_REGISTRATIONS)
+    this._gcMaxRegistrations = fallbackNullish(options.gcMaxRegistrations, GC_MAX_REGISTRATIONS)
+    this._gcJob = this._gcJob.bind(this)
   }
 
   /**
-   * Start the rendezvous client in the libp2p node.
+   * Start rendezvous server for handling rendezvous streams and gc.
    *
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  start () {
-    if (this._isStarted) {
+  async start () {
+    super.start()
+
+    if (this._timeout) {
       return
     }
 
-    this._isStarted = true
+    log('starting')
+
+    await this.rendezvousDatastore.start()
+
+    // Garbage collection
+    this._timeout = setDelayedInterval(
+      this._gcJob, this._gcInterval, this._gcDelay
+    )
+
+    // Incoming streams handling
+    this.handle(PROTOCOL_MULTICODEC, rpc(this))
+
+    // Remove peer records from memory as they are not needed
+    // TODO: This should be handled by PeerStore itself in the future
+    this.peerStore.on('peer', (peerId) => {
+      this.peerStore.delete(peerId)
+    })
+
     log('started')
   }
 
   /**
-   * Clear the rendezvous state and unregister from namespaces.
+   * Stops rendezvous server gc and clears registrations
    *
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   stop () {
-    if (!this._isStarted) {
-      return
-    }
+    this.unhandle(PROTOCOL_MULTICODEC)
+    clearDelayedInterval(this._timeout)
 
-    this._isStarted = false
-    this._cookies.clear()
+    this.rendezvousDatastore.stop()
+
+    super.stop()
     log('stopped')
 
-    // TODO: should unregister from the namespaces registered
+    return Promise.resolve()
   }
 
   /**
-   * Register the peer in a given namespace
+   * Call garbage collector if enough registrations.
+   *
+   * @returns {Promise<void>}
+   */
+  async _gcJob () {
+    if (this._registrationsCount > this._gcMinRegistrations && Date.now() > this._gcMinInterval + this._lastGcTs) {
+      await this._gc()
+    }
+  }
+
+  /**
+   * Run datastore garbage collector.
+   *
+   * @returns {Promise<void>}
+   */
+  async _gc () {
+    log('gc starting')
+
+    const count = await this.rendezvousDatastore.gc()
+    this._registrationsCount -= count
+    this._lastGcTs = Date.now()
+
+    log('gc finished')
+  }
+
+  /**
+   * Add a peer registration to a namespace.
+   *
+   * @param {string} ns
+   * @param {PeerId} peerId
+   * @param {Uint8Array} signedPeerRecord
+   * @param {number} ttl
+   * @returns {Promise<void>}
+   */
+  async addRegistration (ns, peerId, signedPeerRecord, ttl) {
+    await this.rendezvousDatastore.addRegistration(ns, peerId, signedPeerRecord, ttl)
+    log(`added registration for the namespace ${ns} with peer ${peerId.toB58String()}`)
+
+    this._registrationsCount += 1
+    // Manually trigger garbage collector if max registrations threshold reached
+    // and the minGc interval is finished
+    if (this._registrationsCount >= this._gcMaxRegistrations && Date.now() > this._gcMinInterval + this._lastGcTs) {
+      this._gc()
+    }
+  }
+
+  /**
+   * Remove registration of a given namespace to a peer
+   *
+   * @param {string} ns
+   * @param {PeerId} peerId
+   * @returns {Promise<void>}
+   */
+  async removeRegistration (ns, peerId) {
+    const count = await this.rendezvousDatastore.removeRegistration(ns, peerId)
+    log(`removed existing registrations for the namespace ${ns} - peer ${peerId.toB58String()} pair`)
+
+    this._registrationsCount -= count
+  }
+
+  /**
+   * Remove all registrations of a given peer
+   *
+   * @param {PeerId} peerId
+   * @returns {Promise<void>}
+   */
+  async removePeerRegistrations (peerId) {
+    const count = await this.rendezvousDatastore.removePeerRegistrations(peerId)
+    log(`removed existing registrations for peer ${peerId.toB58String()}`)
+
+    this._registrationsCount -= count
+  }
+
+  /**
+   * Get registrations for a namespace
    *
    * @param {string} ns
    * @param {object} [options]
-   * @param {number} [options.ttl = 7.2e6] - registration ttl in ms
-   * @returns {Promise<number>} rendezvous register ttl.
+   * @param {number} [options.limit]
+   * @param {string} [options.cookie]
+   * @returns {Promise<{ registrations: Array<Registration>, cookie?: string }>}
    */
-  async register (ns, { ttl = 7.2e6 } = {}) {
-    if (!ns) {
-      throw errCode(new Error('a namespace must be provided'), errCodes.INVALID_NAMESPACE)
-    }
-
-    // Are there available rendezvous servers?
-    if (!this._rendezvousPoints || !this._rendezvousPoints.length) {
-      throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
-    }
-
-    const message = Message.encode({
-      type: MESSAGE_TYPE.REGISTER,
-      register: {
-        signedPeerRecord: this._libp2p.peerStore.addressBook.getRawEnvelope(this._peerId),
-        ns,
-        ttl: ttl * 1e-3 // Convert to seconds
-      }
-    })
-
-    const registerTasks = []
-
-    /**
-     * @param {Multiaddr} m
-     * @returns {Promise<number>}
-     */
-    const taskFn = async (m) => {
-      const connection = await this._libp2p.dial(m)
-      const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
-
-      const [response] = await pipe(
-        [message],
-        lp.encode(),
-        stream,
-        lp.decode(),
-        toBuffer,
-        collect
-      )
-
-      // Close connection if not any other open streams
-      if (!connection.streams.length) {
-        await connection.close()
-      }
-
-      const recMessage = Message.decode(response)
-
-      if (!recMessage.type === MESSAGE_TYPE.REGISTER_RESPONSE) {
-        throw new Error('unexpected message received')
-      }
-
-      if (recMessage.registerResponse.status !== Message.ResponseStatus.OK) {
-        throw errCode(new Error(recMessage.registerResponse.statusText), recMessage.registerResponse.status)
-      }
-
-      return recMessage.registerResponse.ttl * 1e3 // convert to ms
-    }
-
-    for (const m of this._rendezvousPoints) {
-      registerTasks.push(taskFn(m))
-    }
-
-    // Return first ttl
-    // TODO: consider pAny instead of Promise.all?
-    const [returnTtl] = await Promise.all(registerTasks)
-
-    return returnTtl
+  async getRegistrations (ns, { limit = MAX_DISCOVER_LIMIT, cookie } = {}) {
+    return await this.rendezvousDatastore.getRegistrations(ns, { limit, cookie })
   }
 
   /**
-   * Unregister peer from the nampesapce.
+   * Get number of registrations of a given peer.
    *
-   * @param {string} ns
-   * @returns {Promise<void>}
+   * @param {PeerId} peerId
+   * @returns {Promise<number>}
    */
-  async unregister (ns) {
-    if (!ns) {
-      throw errCode(new Error('a namespace must be provided'), errCodes.INVALID_NAMESPACE)
-    }
-
-    // Are there available rendezvous servers?
-    if (!this._rendezvousPoints || !this._rendezvousPoints.length) {
-      throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
-    }
-
-    const message = Message.encode({
-      type: MESSAGE_TYPE.UNREGISTER,
-      unregister: {
-        id: this._peerId.toBytes(),
-        ns
-      }
-    })
-
-    const unregisterTasks = []
-    /**
-     * @param {Multiaddr} m
-     * @returns {Promise<void>}
-     */
-    const taskFn = async (m) => {
-      const connection = await this._libp2p.dial(m)
-      const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
-
-      await pipe(
-        [message],
-        lp.encode(),
-        stream,
-        async (source) => {
-          for await (const _ of source) { } // eslint-disable-line
-        }
-      )
-
-      // Close connection if not any other open streams
-      if (!connection.streams.length) {
-        await connection.close()
-      }
-    }
-
-    for (const m of this._rendezvousPoints) {
-      unregisterTasks.push(taskFn(m))
-    }
-
-    await Promise.all(unregisterTasks)
-  }
-
-  /**
-   * Discover peers registered under a given namespace
-   *
-   * @param {string} ns
-   * @param {number} [limit = MAX_DISCOVER_LIMIT]
-   * @returns {AsyncIterable<{ signedPeerRecord: Uint8Array, ns: string, ttl: number }>}
-   */
-  async * discover (ns, limit = MAX_DISCOVER_LIMIT) {
-    // TODO: consider opening the envelope in the dicover
-    // This would store the addresses in the AddressBook
-
-    // Are there available rendezvous servers?
-    if (!this._rendezvousPoints || !this._rendezvousPoints.length) {
-      throw errCode(new Error('no rendezvous servers connected'), errCodes.NO_CONNECTED_RENDEZVOUS_SERVERS)
-    }
-
-    const registrationTransformer = (r) => ({
-      signedPeerRecord: r.signedPeerRecord,
-      ns: r.ns,
-      ttl: r.ttl * 1e3 // convert to ms
-    })
-
-    // Iterate over all rendezvous points
-    for (const m of this._rendezvousPoints) {
-      const namespaseCookies = this._cookies.get(ns) || new Map()
-
-      // Check if we have a cookie and encode discover message
-      const cookie = namespaseCookies.get(m.toString())
-      const message = Message.encode({
-        type: MESSAGE_TYPE.DISCOVER,
-        discover: {
-          ns,
-          limit,
-          cookie: cookie ? fromString(cookie) : undefined
-        }
-      })
-
-      // Send discover message and wait for response
-      const connection = await this._libp2p.dial(m)
-      const { stream } = await connection.newStream(PROTOCOL_MULTICODEC)
-      const [response] = await pipe(
-        [message],
-        lp.encode(),
-        stream,
-        lp.decode(),
-        toBuffer,
-        collect
-      )
-
-      if (!connection.streams.length) {
-        await connection.close()
-      }
-
-      const recMessage = Message.decode(response)
-
-      if (!recMessage.type === MESSAGE_TYPE.DISCOVER_RESPONSE) {
-        throw new Error('unexpected message received')
-      } else if (recMessage.discoverResponse.status !== Message.ResponseStatus.OK) {
-        throw errCode(new Error(recMessage.discoverResponse.statusText), recMessage.discoverResponse.status)
-      }
-
-      // Iterate over registrations response
-      for (const r of recMessage.discoverResponse.registrations) {
-        // track registrations
-        yield registrationTransformer(r)
-
-        limit--
-        if (limit === 0) {
-          break
-        }
-      }
-
-      // Store cookie
-      const c = recMessage.discoverResponse.cookie
-      if (c && c.length) {
-        const nsCookies = this._cookies.get(ns) || new Map()
-        nsCookies.set(m.toString(), toString(c))
-        this._cookies.set(ns, nsCookies)
-      }
-    }
+  async getNumberOfRegistrationsFromPeer (peerId) {
+    return await this.rendezvousDatastore.getNumberOfRegistrationsFromPeer(peerId)
   }
 }
 
-module.exports = Rendezvous
+module.exports = RendezvousServer

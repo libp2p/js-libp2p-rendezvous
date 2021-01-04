@@ -12,10 +12,10 @@ const multiaddr = require('multiaddr')
 const PeerId = require('peer-id')
 const Libp2p = require('libp2p')
 
-const RendezvousServer = require('../src/server')
+const RendezvousServer = require('../src')
 const {
   PROTOCOL_MULTICODEC
-} = require('../src/server/constants')
+} = require('../src/constants')
 const { Message } = require('../src/proto')
 const MESSAGE_TYPE = Message.MessageType
 const RESPONSE_STATUS = Message.ResponseStatus

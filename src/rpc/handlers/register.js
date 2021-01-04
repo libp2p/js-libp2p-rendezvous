@@ -9,7 +9,7 @@ const log = Object.assign(debug('libp2p:rendezvous-server:rpc:register'), {
 const Envelope = require('libp2p/src/record/envelope')
 const PeerRecord = require('libp2p/src/record/peer-record')
 
-const { Message } = require('../../../proto')
+const { Message } = require('../../proto')
 const MESSAGE_TYPE = Message.MessageType
 const RESPONSE_STATUS = Message.ResponseStatus
 
