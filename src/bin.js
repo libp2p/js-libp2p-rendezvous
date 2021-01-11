@@ -4,6 +4,7 @@
 
 // Usage: $0 [--datastoreHost <hostname>] [--datastoreUser <username>] [datastorePassword <password>] [datastoreDatabase <name>] [--enableMemoryDatabase]
 //            [--peerId <jsonFilePath>] [--listenMultiaddrs <ma> ... <ma>] [--announceMultiaddrs <ma> ... <ma>] [--metricsPort <port>] [--disableMetrics]
+//            [--maxPeerRegistrations <number>]
 
 /* eslint-disable no-console */
 
@@ -55,6 +56,9 @@ async function main () {
     log('If you want to keep the same address for the server you should provide a peerId with --peerId <jsonFilePath>')
   }
 
+  // Rendezvous server configuration
+  const maxPeerRegistrations = argv.maxPeerRegistrations ? Number(argv.maxPeerRegistrations) : 1000
+
   const datastore = memoryDatabase ? new DatastoreMemory() : new Datastore({
     host,
     user,
@@ -74,8 +78,9 @@ async function main () {
       listen: listenAddresses,
       announce: announceAddresses
     }
-  }, { datastore })
+  }, { datastore, maxPeerRegistrations })
 
+  console.log('Rendezvous server is starting')
   await rendezvousServer.start()
 
   rendezvousServer.peerStore.on('change:multiaddrs', ({ peerId, multiaddrs }) => {

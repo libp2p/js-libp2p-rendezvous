@@ -73,7 +73,6 @@
     "peer-id": "^0.14.1",
     "protons": "^2.0.0",
     "set-delayed-interval": "^1.0.0",
-    "streaming-iterables": "^5.0.2",
     "uint8arrays": "^2.0.5"
   },
   "devDependencies": {
@@ -85,9 +84,12 @@
     "execa": "^5.0.0",
     "ipfs-utils": "^5.0.1",
     "is-ci": "^2.0.0",
+    "microtime": "^3.0.0",
     "p-defer": "^3.0.0",
     "p-times": "^3.0.0",
     "p-wait-for": "^3.1.0",
-    "sinon": "^9.0.3"
+    "pidusage": "^2.0.21",
+    "sinon": "^9.0.3",
+    "streaming-iterables": "^5.0.3"
   }
 }
