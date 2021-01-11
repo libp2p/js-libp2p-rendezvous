@@ -329,9 +329,6 @@ describe('rendezvous server', () => {
     // wait for firt record to be removed (2nd gc)
     await pWaitFor(() => spy.callCount >= 2)
 
-    r = await rServer.getRegistrations(testNamespace)
-    expect(r.registrations).to.have.lengthOf(1)
-
     // wait for second record to be removed
     await pRetry(async () => {
       r = await rServer.getRegistrations(testNamespace)
