@@ -77,8 +77,13 @@ async function main () {
   }, { datastore })
 
   await rendezvousServer.start()
-  console.log('Rendezvous server listening on:')
-  rendezvousServer.multiaddrs.forEach((m) => console.log(m))
+
+  rendezvousServer.peerStore.on('change:multiaddrs', ({ peerId, multiaddrs }) => {
+    console.log('Rendezvous server listening on:')
+    if (peerId.equals(rendezvousServer.peerId)) {
+      multiaddrs.forEach((m) => console.log(`${m}/p2p/${peerId.toB58String()}`))
+    }
+  })
 
   if (metrics) {
     log('enabling metrics')
@@ -92,7 +97,7 @@ async function main () {
     menoetius.instrument(metricsServer)
 
     metricsServer.listen(metricsPort, '0.0.0.0', () => {
-      console.log(`metrics server listening on ${metricsPort.port}`)
+      console.log(`metrics server listening on ${metricsPort}`)
     })
   }
 
