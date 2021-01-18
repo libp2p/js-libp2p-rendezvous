@@ -1,0 +1,62 @@
+name: ci
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: yarn
+    - run: yarn lint
+    - uses: gozala/typescript-error-reporter-action@v1.0.8
+    - run: yarn build
+    - run: yarn aegir dep-check
+    - uses: ipfs/aegir/actions/bundle-size@master
+      name: size
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+  test-node:
+    needs: check
+    runs-on: ${{ matrix.os }}
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: test-secret-pw
+          MYSQL_DATABASE: libp2p_rendezvous_db
+        ports:
+        - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        node: [12, 14]
+      fail-fast: true
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node }}
+      - run: yarn
+      - run: npx nyc --reporter=lcov aegir test -t node -- --bail
+      - uses: codecov/codecov-action@v1
+  test-chrome:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: yarn
+      - run: npx aegir test -t browser -t webworker --bail
+  test-firefox:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: yarn
+      - run: npx aegir test -t browser -t webworker --bail -- --browsers FirefoxHeadless

@@ -1,87 +1,138 @@
 'use strict'
 
+const Transport = require('libp2p-websockets')
+const Muxer = require('libp2p-mplex')
+const { NOISE: Crypto } = require('libp2p-noise')
+const PeerId = require('peer-id')
+
+const pTimes = require('p-times')
+const { isNode } = require('ipfs-utils/src/env')
+
 const Libp2p = require('libp2p')
-const TCP = require('libp2p-tcp')
-const MPLEX = require('libp2p-mplex')
-const SPDY = require('libp2p-spdy')
-const SECIO = require('libp2p-secio')
+const multiaddr = require('multiaddr')
+const Envelope = require('libp2p/src/record/envelope')
+const PeerRecord = require('libp2p/src/record/peer-record')
 
-const Id = require('peer-id')
-const Peer = require('peer-info')
+const RendezvousServer = require('../src')
 
-const Server = require('../src/server')
-const Client = require('../src')
+const Peers = require('./fixtures/peers')
+const { MULTIADDRS_WEBSOCKETS } = require('./fixtures/browser')
+const relayAddr = MULTIADDRS_WEBSOCKETS[0]
 
-const Utils = module.exports = (id, addrs, cb) => {
-  Id.createFromJSON(require(id), (err, id) => {
-    if (err) return cb(err)
-    const peer = new Peer(id)
-    addrs.forEach(a => peer.multiaddrs.add(a))
-
-    const swarm = new Libp2p({
-      transport: [
-        new TCP()
-      ],
-      connection: {
-        muxer: [
-          MPLEX,
-          SPDY
-        ],
-        crypto: [SECIO]
-      }
-    }, peer, null, {
-      relay: {
-        enabled: true,
-        hop: {
-          enabled: true,
-          active: false
-        }
-      }
-    })
-
-    swarm.start(err => {
-      if (err) return cb(err)
-      cb(null, swarm)
-    })
-  })
+const defaultConfig = {
+  modules: {
+    transport: [Transport],
+    streamMuxer: [Muxer],
+    connEncryption: [Crypto]
+  }
 }
 
-Utils.id = (id, addrs, cb) => {
-  Id.createFromJSON(require(id), (err, id) => {
-    if (err) return cb(err)
-    const peer = new Peer(id)
-    addrs.forEach(a => peer.multiaddrs.add(a))
-    cb(null, peer)
-  })
+module.exports.defaultLibp2pConfig = defaultConfig
+
+/**
+ * Create Perr Id.
+ *
+ * @param {Object} [properties]
+ * @param {number} [properties.number = 1] - number of peers.
+ * @param {boolean} [properties.fixture = true]
+ * @returns {Promise<Array<PeerId>>}
+ */
+async function createPeerId ({ number = 1, fixture = true } = {}) {
+  const peerIds = await pTimes(number, (i) => fixture
+    ? PeerId.createFromJSON(Peers[i])
+    : PeerId.create())
+
+  return peerIds
 }
 
-Utils.createServer = (id, addrs, opt, cb) => {
-  Utils(id, addrs, (err, swarm) => {
-    if (err) return cb(err)
-    const server = new Server(Object.assign(opt || {}, {node: swarm}))
-    server.start()
-    return cb(null, server, swarm)
-  })
+module.exports.createPeerId = createPeerId
+
+/**
+ * Create libp2p nodes.
+ *
+ * @param {Object} [properties]
+ * @param {Object} [properties.config = {}]
+ * @param {number} [properties.number = 1] - number of peers
+ * @param {boolean} [properties.started = true] - nodes should start
+ * @returns {Promise<Array<Libp2p>>}
+ */
+async function createPeer ({ number = 1, started = true, config = {} } = {}) {
+  const peerIds = await pTimes(number, (i) => PeerId.createFromJSON(Peers[i]))
+  const peers = await pTimes(number, (i) => Libp2p.create({
+    peerId: peerIds[i],
+    addresses: {
+      listen: [multiaddr(`${relayAddr}/p2p-circuit`)]
+    },
+    ...defaultConfig,
+    ...config
+  }))
+
+  if (started) {
+    await Promise.all(peers.map((p) => p.start()))
+  }
+
+  return peers
 }
 
-Utils.createClient = (id, addrs, cb) => {
-  Utils(id, addrs, (err, swarm) => {
-    if (err) return cb(err)
-    const client = new Client(swarm)
-    client.start(err => {
-      if (err) return cb(err)
-      return cb(null, client, swarm)
-    })
-  })
+module.exports.createPeer = createPeer
+
+/**
+ * Create rendezvous server.
+ *
+ * @param {Object} [properties]
+ * @param {Object} [properties.config = {}]
+ * @param {boolean} [properties.started = true] - node should start
+ */
+async function createRendezvousServer ({ config = {}, started = true } = {}) {
+  const [peerId] = await createPeerId({ fixture: false })
+
+  const datastore = createDatastore()
+  const rendezvous = new RendezvousServer({
+    peerId: peerId,
+    addresses: {
+      listen: [`${relayAddr}/p2p-circuit`]
+    },
+    ...defaultConfig,
+    ...config
+  }, { datastore })
+
+  if (started) {
+    await rendezvous.start()
+  }
+
+  return rendezvous
 }
 
-Utils.default = cb => Utils.createServer('./server.id.json', ['/ip4/0.0.0.0/tcp/0'], {}, (err, server) => {
-  if (err) return cb(err)
-  Utils.createClient('./client.id.json', ['/ip4/0.0.0.0/tcp/0'], (err, client) => {
-    if (err) return cb(err)
-    Utils.createClient('./client2.id.json', ['/ip4/0.0.0.0/tcp/0'], (err, client2) => {
-      if (err) return cb(err)
-      return cb(null, client, server, client2)
-    })
+module.exports.createRendezvousServer = createRendezvousServer
+
+async function createSignedPeerRecord (peerId, multiaddrs) {
+  const pr = new PeerRecord({
+    peerId,
+    multiaddrs
   })
-})
+
+  const envelope = await Envelope.seal(pr, peerId)
+
+  return envelope
+}
+
+module.exports.createSignedPeerRecord = createSignedPeerRecord
+
+function createDatastore () {
+  if (!isNode) {
+    const Memory = require('../src/datastores/memory')
+    return new Memory()
+  }
+
+  const MySql = require('../src/datastores/mysql')
+  const datastore = new MySql({
+    host: 'localhost',
+    user: 'root',
+    password: 'test-secret-pw',
+    database: 'libp2p_rendezvous_db'
+  })
+
+  return datastore
+}
+
+module.exports.createDatastore = createDatastore

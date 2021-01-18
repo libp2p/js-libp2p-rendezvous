@@ -1,11 +1,28 @@
 {
   "name": "libp2p-rendezvous",
   "version": "0.0.0",
-  "description": "A javascript implementation of the rendezvous protocol for libp2p",
-  "leadMaintainer": "Vasco Santos <vasco.santos@moxy.studio>",
-  "main": "index.js",
-  "scripts": {
-    "test": "aegir test"
+  "description": "Javascript implementation of the rendezvous protocol server for libp2p",
+  "leadMaintainer": "Vasco Santos <santos.vasco10@gmail.com>",
+  "main": "src/index.js",
+  "types": "dist/src/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "src/*": [
+        "dist/src/*",
+        "dist/src/*/index"
+      ]
+    }
+  },
+  "bin": {
+    "libp2p-rendezvous-server": "src/bin.js"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/libp2p/js-libp2p-rendezvous.git"
   },
   "keywords": [
     "libp2p",
@@ -13,28 +30,66 @@
     "protocol",
     "discovery"
   ],
-  "author": "Maciej Krüger <mkg20001@gmail.com>",
+  "bugs": {
+    "url": "https://github.com/libp2p/js-libp2p-rendezvous/issues"
+  },
+  "homepage": "https://github.com/libp2p/js-libp2p-rendezvous",
   "license": "MIT",
+  "engines": {
+    "node": ">=12.0.0",
+    "npm": ">=6.0.0"
+  },
+  "browser": {
+    "mysql": false
+  },
+  "scripts": {
+    "lint": "aegir lint",
+    "build": "aegir build",
+    "test": "aegir test",
+    "test:node": "aegir test -t node",
+    "test:browser": "aegir test -t browser",
+    "release": "aegir release",
+    "release-minor": "aegir release --type minor",
+    "release-major": "aegir release --type major",
+    "coverage": "nyc --reporter=text --reporter=lcov npm test"
+  },
   "dependencies": {
-    "chai": "^4.1.2",
-    "dirty-chai": "^2.0.1",
-    "protons": "^1.0.1",
-    "pull-protocol-buffers": "^0.1.2"
+    "debug": "^4.2.0",
+    "err-code": "^2.0.3",
+    "es6-promisify": "^6.1.1",
+    "it-buffer": "^0.1.2",
+    "it-length-prefixed": "^3.1.0",
+    "it-pipe": "^1.1.0",
+    "libp2p": "^0.30.0",
+    "libp2p-mplex": "^0.10.0",
+    "libp2p-noise": "^2.0.1",
+    "libp2p-tcp": "^0.15.1",
+    "libp2p-websockets": "^0.14.0",
+    "menoetius": "0.0.2",
+    "minimist": "^1.2.5",
+    "multiaddr": "^8.0.0",
+    "mysql": "^2.18.1",
+    "p-retry": "^4.2.0",
+    "peer-id": "^0.14.1",
+    "protons": "^2.0.0",
+    "set-delayed-interval": "^1.0.0",
+    "uint8arrays": "^2.0.5"
   },
   "devDependencies": {
-    "aegir": "^13.1.0",
-    "libp2p": "^0.20.2",
-    "libp2p-mplex": "^0.7.0",
-    "libp2p-secio": "^0.10.0",
-    "libp2p-spdy": "^0.12.1",
-    "libp2p-tcp": "^0.12.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mkg20001/libp2p-rendezvous.git"
-  },
-  "bugs": {
-    "url": "https://github.com/mkg20001/libp2p-rendezvous/issues"
-  },
-  "homepage": "https://github.com/mkg20001/libp2p-rendezvous#readme"
+    "aegir": "^29.2.2",
+    "chai": "^4.2.0",
+    "chai-as-promised": "^7.1.1",
+    "delay": "^4.4.0",
+    "dirty-chai": "^2.0.1",
+    "execa": "^5.0.0",
+    "ipfs-utils": "^5.0.1",
+    "is-ci": "^2.0.0",
+    "microtime": "^3.0.0",
+    "p-defer": "^3.0.0",
+    "p-times": "^3.0.0",
+    "p-wait-for": "^3.1.0",
+    "pidusage": "^2.0.21",
+    "sinon": "^9.0.3",
+    "streaming-iterables": "^5.0.3"
+  }
 }
