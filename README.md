@@ -1,7 +1,10 @@
 # libp2p-rendezvous
 
-A javascript implementation of the rendezvous protocol for libp2p
+> A javascript implementation of the rendezvous protocol for libp2p
 
+⚠️ THIS MODULE IS STILL A WORK IN PROGRESS 🚧
+
+See: https://github.com/libp2p/js-libp2p-rendezvous/pull/6
 
 ## Lead Maintainer
 
