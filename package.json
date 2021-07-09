@@ -3,9 +3,15 @@
   "version": "0.0.0",
   "description": "A javascript implementation of the rendezvous protocol for libp2p",
   "leadMaintainer": "Vasco Santos <vasco.santos@moxy.studio>",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "test": "aegir test"
+    "test": "aegir test",
+    "test:node": "aegir test -t node",
+    "test:browser": "aegir test -t browser",
+    "test:webworker": "aegir test -t webworker"
+  },
+  "browser": {
+    "test/utils.js": "./test/utils.browser.js"
   },
   "keywords": [
     "libp2p",
@@ -18,16 +24,20 @@
   "dependencies": {
     "chai": "^4.1.2",
     "dirty-chai": "^2.0.1",
+    "immutable": "4.0.0-rc.9",
+    "promisify-es6": "^1.0.3",
     "protons": "^1.0.1",
-    "pull-protocol-buffers": "^0.1.2"
+    "pull-protocol-buffers": "^0.1.2",
+    "pull-through": "^1.0.18"
   },
   "devDependencies": {
-    "aegir": "^13.1.0",
-    "libp2p": "^0.20.2",
+    "aegir": "^14.0.0",
+    "libp2p": "^0.20.4",
     "libp2p-mplex": "^0.7.0",
     "libp2p-secio": "^0.10.0",
     "libp2p-spdy": "^0.12.1",
-    "libp2p-tcp": "^0.12.0"
+    "libp2p-tcp": "^0.12.0",
+    "libp2p-websockets": "^0.12.0"
   },
   "repository": {
     "type": "git",
