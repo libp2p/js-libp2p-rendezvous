@@ -3,66 +3,85 @@
 /* eslint-env mocha */
 
 const {parallel} = require('async')
-const Utils = require('./utils')
+const Utils = require('./utils.peer')
+const pull = require('pull-stream')
+const proto = require('../src/proto')
+const promisify = require('promisify-es6')
 
 const chai = require('chai')
 const dirtyChai = require('dirty-chai')
 const expect = chai.expect
+const wait = () => new Promise((resolve) => setTimeout(() => resolve(), 100))
 chai.use(dirtyChai)
 
+const discover = (client, ns) => promisify(client._client.discover.bind(client._client))(ns || null)
+
 describe('discovery', () => {
-  let client
+  let client1
   let client2
-  let server
 
-  before(done => {
-    Utils.default((err, _client, _server, _client2) => {
-      if (err) return done(err)
-      client = _client
-      client2 = _client2
-      server = _server
-      parallel([client, client2].map(c => cb => c._dial(server.node.peerInfo, cb)), done)
-    })
+  before(async () => {
+    client1 = await Utils.createRendezvousPeer(require('./client1.id.json'))
+    client2 = await Utils.createRendezvousPeer(require('./client2.id.json'))
   })
 
-  it('register', done => {
-    parallel(
-      [client, client2].map(c => cb => c.register('hello', c.swarm.peerInfo, cb)),
-      (...a) => setTimeout(() => done(...a), 100) // Queue is being processed every 100ms
-    )
+  it('register client1@hello', async () => {
+    client1.register('hello')
+    await wait()
+  })
+  it('discover client1@hello from client2', async () => {
+    const res = await discover(client2, 'hello')
+    expect(res).to.have.lengthOf(1)
+    expect(res[0].id.toB58String()).to.equal(client1.swarm.peerInfo.id.toB58String())
+  })
+  it('can\'t discover client1@<GLOBAL> from client2', async () => {
+    const res = await discover(client2)
+    expect(res).to.have.lengthOf(0)
+  })
+  it('can\'t discover client1@hello from client1', async () => {
+    const res = await discover(client1, 'hello')
+    expect(res).to.have.lengthOf(0)
   })
 
-  it('discover', done => {
-    client.discover('hello', (err, res) => {
-      if (err) return done(err)
-      expect(err).to.not.exist()
-      expect(res.peers).to.have.lengthOf(1)
-      expect(res.peers[0].id.toB58String()).to.equal(client2.swarm.peerInfo.id.toB58String())
-      done()
-    })
+  it('dial client2->client1', async () => {
+    const res = await discover(client2, 'hello')
+    await promisify(client2.swarm.dial.bind(client2.swarm, res[0]))()
   })
 
-  it('unregister', done => {
-    client2.unregister('hello')
-    setTimeout(() => done(), 100) // Queue is being processed every 100ms
+  it('register client2@<GLOBAL>', async () => {
+    client2.register()
+    await wait()
+  })
+  it('discover client2@<GLOBAL> from client1', async () => {
+    const res = await discover(client1)
+    expect(res).to.have.lengthOf(1)
+    expect(res[0].id.toB58String()).to.equal(client2.swarm.peerInfo.id.toB58String())
+  })
+  it('can\'t discover client2@hello from client2', async () => {
+    const res = await discover(client2, 'hello')
+    expect(res).to.have.lengthOf(1)
+    expect(res[0].id.toB58String()).to.equal(client1.swarm.peerInfo.id.toB58String()) // check if id is NOT from client2
+  })
+  it('can\'t discover client2@<GLOBAL> from client2', async () => {
+    const res = await discover(client2)
+    expect(res).to.have.lengthOf(0)
   })
 
-  it('discover (after unregister)', done => {
-    client.discover('hello', (err, res) => {
-      if (err) return done(err)
-      expect(err).to.not.exist()
-      expect(res.peers).to.have.lengthOf(0)
-      done()
-    })
+  it('unregister client1@hello', async () => {
+    client1.unregister('hello')
+    await wait()
+  })
+  it('can\'t discover client1@hello from client2 anymore', async () => {
+    const res = await discover(client2, 'hello')
+    expect(res).to.have.lengthOf(0)
   })
 
-  it('unregister other client', done => {
-    client.unregister('hello')
-    setTimeout(() => done(), 100) // Queue is being processed every 100ms
+  it('unregister client2@<GLOBAL>', async () => {
+    client2.unregister()
+    await wait()
   })
-
-  it('gc', () => {
-    server.gc()
-    expect(Object.keys(server.table.NS)).to.have.lengthOf(0)
+  it('can\'t discover client2@<GLOBAL> from client1 anymore', async () => {
+    const res = await discover(client1)
+    expect(res).to.have.lengthOf(0)
   })
 })
